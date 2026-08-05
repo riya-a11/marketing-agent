@@ -21,7 +21,7 @@ class MontageEngine:
             "scenes_assembled": len(scenes),
             "captions_rendered": True,
             "audio_track": "synthesized_voiceover.wav",
-            "output_video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
+            "output_video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
         }
         
         return assembly_timeline

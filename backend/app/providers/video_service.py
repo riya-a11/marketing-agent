@@ -17,7 +17,7 @@ class MockVideoProvider(BaseVideoProvider):
             "status": "completed",
             "provider": "MockVideoProvider",
             "aspect_ratio": "9:16",
-            "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+            "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
             "preview_thumbnail": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80",
             "render_time_seconds": 3.2
         }
