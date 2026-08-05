@@ -34,3 +34,35 @@ class ReviewScorecard(BaseModel):
     overall_score: int
     breakdown: Dict[str, int]
     feedback_notes: str
+
+class VideoPreferences(BaseModel):
+    aspect_ratio: str = "9:16"
+    target_duration: str = "30s" # options: 15s, 30s, 60s
+    visual_style: str = "Cinematic Founder" # options: Cinematic Founder, Minimalist Tech, Dynamic UGC, Kinetic Typography
+    voice_tone: str = "Energetic" # options: Energetic, Authoritative, Relatable, Enthusiastic
+
+class Scene(BaseModel):
+    scene_number: int
+    duration_seconds: int
+    visual_description: str
+    text_overlay: str
+    voiceover_text: str
+    ai_video_prompt: str
+
+class VideoStoryboardRequest(BaseModel):
+    selected_post: str
+    brand_memory: Optional[Dict[str, Any]] = None
+    preferences: Optional[VideoPreferences] = None
+
+class VideoStoryboardResponse(BaseModel):
+    video_title: str
+    aspect_ratio: str = "9:16"
+    total_estimated_seconds: int
+    full_voiceover_script: str
+    scenes: List[Scene]
+
+class VideoRenderRequest(BaseModel):
+    campaign_id: Optional[str] = "default-campaign"
+    provider_name: str = "veo" # options: veo, cosmos, mock
+    storyboard: VideoStoryboardResponse
+

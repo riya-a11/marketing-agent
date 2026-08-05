@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Bot, Mail, Lock, ArrowRight, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { login, signup } from "@/lib/api-client";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -11,18 +12,26 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    setErrorMsg("");
+    
+    try {
       if (isSignUp) {
+        await signup({ email, password });
         router.push("/onboarding/chat");
       } else {
+        await login({ email, password });
         router.push("/dashboard");
       }
-    }, 800);
+    } catch (err: any) {
+      setErrorMsg(err.message || "An error occurred during authentication.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -41,6 +50,13 @@ export default function LoginPage() {
 
         {/* Card Form */}
         <form onSubmit={handleSubmit} className="p-8 rounded-2xl bg-slate-900 border border-slate-800 space-y-5 shadow-2xl">
+          
+          {errorMsg && (
+            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-semibold text-center">
+              {errorMsg}
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-slate-300">Email Address</label>
             <div className="relative">

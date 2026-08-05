@@ -31,3 +31,44 @@ export async function generateContent(params: { brand_profile_id: string; conten
 export async function getCampaigns() {
   return fetchApi("/api/v1/campaigns");
 }
+
+export async function login(credentials: any) {
+  return fetchApi("/api/v1/auth/login", {
+    method: "POST",
+    body: JSON.stringify(credentials),
+  });
+}
+
+export async function signup(credentials: any) {
+  return fetchApi("/api/v1/auth/signup", {
+    method: "POST",
+    body: JSON.stringify(credentials),
+  });
+}
+
+export async function generateVideoStoryboard(params: {
+  selected_post: string;
+  brand_memory?: any;
+  preferences?: {
+    aspect_ratio?: string;
+    target_duration?: string;
+    visual_style?: string;
+    voice_tone?: string;
+  };
+}) {
+  return fetchApi("/api/v1/video/storyboard", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
+export async function renderVideo(params: {
+  campaign_id?: string;
+  provider_name: string;
+  storyboard: any;
+}) {
+  return fetchApi("/api/v1/video/render", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}

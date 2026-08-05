@@ -80,6 +80,9 @@ export default function Dashboard() {
           <span className="text-indigo-400">Dashboard</span>
           <span className="hover:text-white cursor-pointer">History</span>
           <span className="hover:text-white cursor-pointer">Brand Memory</span>
+          <a href="/dashboard/video-studio" className="px-3 py-1.5 rounded-lg bg-purple-600/20 border border-purple-500/30 text-purple-300 hover:text-white transition-all">
+            Video Studio (9:16)
+          </a>
         </div>
       </header>
 

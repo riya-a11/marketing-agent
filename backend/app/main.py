@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.api import auth, interview, brand, content, campaigns
+from app.api import auth, interview, brand, content, campaigns, video
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -22,6 +22,7 @@ app.include_router(interview.router, prefix="/api/v1")
 app.include_router(brand.router, prefix="/api/v1")
 app.include_router(content.router, prefix="/api/v1")
 app.include_router(campaigns.router, prefix="/api/v1")
+app.include_router(video.router, prefix="/api/v1")
 
 @app.get("/")
 def read_root():
