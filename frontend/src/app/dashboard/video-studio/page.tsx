@@ -227,16 +227,29 @@ export default function VideoStudioPage() {
               {renderResult && (
                 <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 space-y-3">
                   <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold">
-                    <CheckCircle2 className="w-4 h-4" /> Render Request Dispatched ({renderResult.provider})
+                    <CheckCircle2 className="w-4 h-4" /> Render Request Dispatched ({renderResult.rendering?.provider || renderResult.provider || provider.toUpperCase()})
                   </div>
                   <p className="text-xs text-slate-300">
-                    Status: <span className="font-mono text-emerald-300 uppercase">{renderResult.status}</span>
+                    Status: <span className="font-mono text-emerald-300 uppercase">{renderResult.status || renderResult.rendering?.status || "COMPLETED"}</span>
                   </p>
-                  {renderResult.video_url && (
-                    <video controls className="w-full max-w-[280px] rounded-xl border border-slate-800 mx-auto">
-                      <source src={renderResult.video_url} type="video/mp4" />
-                      Your browser does not support vertical video player.
-                    </video>
+                  {(renderResult.video_url || renderResult.rendering?.video_url) && (
+                    <div className="space-y-2 text-center">
+                      <video 
+                        controls 
+                        autoPlay
+                        loop
+                        src={renderResult.video_url || renderResult.rendering?.video_url}
+                        className="w-full max-w-[280px] rounded-xl border border-slate-800 mx-auto shadow-2xl"
+                      />
+                      <a 
+                        href={renderResult.video_url || renderResult.rendering?.video_url} 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="inline-block text-xs font-semibold text-purple-400 hover:text-purple-300 underline"
+                      >
+                        Open Video Sample MP4 in New Tab
+                      </a>
+                    </div>
                   )}
                 </div>
               )}
