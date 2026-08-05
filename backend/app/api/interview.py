@@ -1,28 +1,24 @@
-import os
-import json
-from fastapi import APIRouter
-from app.models.schemas import InterviewRequest
-from app.orchestrator.engine import orchestrator
+from fastapi import APIRouter, HTTPException
+from typing import Dict, Any, List, Optional
+from pydantic import BaseModel
+from app.agents.interview_agent import interview_agent
 
 router = APIRouter(prefix="/interview", tags=["Interview"])
 
-def load_prompt(filename: str) -> str:
-    path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "prompts", filename)
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read()
-    return "Default interview system prompt."
+class ConversationTurnRequest(BaseModel):
+    message: str
+    history: Optional[List[Dict[str, str]]] = []
+    current_slots: Optional[Dict[str, Any]] = {}
 
 @router.post("/message")
-async def interview_turn(req: InterviewRequest):
-    system_prompt = load_prompt("interview.md")
-    raw_res = await orchestrator.execute_step(
-        step_name="Adaptive Interview Step",
-        system_prompt=system_prompt,
-        user_input=req.message,
-        context=req.context
-    )
+async def interview_turn(req: ConversationTurnRequest):
+    """Processes a conversational turn in the founder onboarding interview, extracts facts, and updates progress."""
     try:
-        return json.loads(raw_res)
-    except Exception:
-        return {"reply": raw_res, "missing_slots": [], "completion_percentage": 50}
+        res = await interview_agent.process_turn(
+            user_message=req.message,
+            history=req.history,
+            current_slots=req.current_slots
+        )
+        return res
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Sparkles, Edit3, ArrowRight, ShieldCheck, Tag, Target, Megaphone } from "lucide-react";
 import Link from "next/link";
 
 export default function BrandSummary() {
-  const [brandProfile, setBrandProfile] = useState({
+  const [brandProfile, setBrandProfile] = useState<any>({
     brand_name: "NexusAI",
     industry: "AI / B2B SaaS",
     mission: "Empower early-stage startup founders with automated, consistent marketing.",
@@ -14,6 +14,21 @@ export default function BrandSummary() {
     keywords: ["AI Marketing", "Automation", "Startup Growth", "Brand Consistency"],
     taboo_topics: ["Overhyped buzzwords", "Aggressive sales pitches", "Competitor bashing"],
   });
+
+  useEffect(() => {
+    async function loadProfile() {
+      try {
+        const res = await fetch("http://127.0.0.1:8000/api/v1/brand-profile/me");
+        if (res.ok) {
+          const data = await res.json();
+          setBrandProfile((prev: any) => ({ ...prev, ...data }));
+        }
+      } catch (err) {
+        console.log("Using default brand profile fallback");
+      }
+    }
+    loadProfile();
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
@@ -68,7 +83,7 @@ export default function BrandSummary() {
               <Target className="w-4 h-4" /> Target Buyer Personas
             </div>
             <div className="flex flex-wrap gap-2">
-              {brandProfile.buyer_personas.map((persona, i) => (
+              {brandProfile.buyer_personas?.map((persona: string, i: number) => (
                 <span key={i} className="px-3 py-1 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-300 text-xs font-medium">
                   {persona}
                 </span>
@@ -81,7 +96,7 @@ export default function BrandSummary() {
               <Tag className="w-4 h-4" /> Core Brand Keywords
             </div>
             <div className="flex flex-wrap gap-2">
-              {brandProfile.keywords.map((kw, i) => (
+              {brandProfile.keywords?.map((kw: string, i: number) => (
                 <span key={i} className="px-3 py-1 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-300 text-xs font-medium">
                   #{kw}
                 </span>
@@ -94,7 +109,7 @@ export default function BrandSummary() {
               <Sparkles className="w-4 h-4" /> Taboo Topics & Avoid List
             </div>
             <div className="flex flex-wrap gap-2">
-              {brandProfile.taboo_topics.map((topic, i) => (
+              {brandProfile.taboo_topics?.map((topic: string, i: number) => (
                 <span key={i} className="px-3 py-1 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs font-medium">
                   ✕ {topic}
                 </span>

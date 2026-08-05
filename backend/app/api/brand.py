@@ -1,35 +1,35 @@
-import os
-import json
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from typing import Dict, Any
-from app.orchestrator.engine import orchestrator
+from app.agents.brand_agent import brand_agent
 
 router = APIRouter(prefix="/brand-profile", tags=["Brand Memory"])
 
-def load_prompt(filename: str) -> str:
-    path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "prompts", filename)
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read()
-    return "Default brand system prompt."
-
 @router.post("/generate")
 async def generate_brand_profile(interview_data: Dict[str, Any]):
-    system_prompt = load_prompt("brand.md")
-    raw_res = await orchestrator.execute_step(
-        step_name="Brand Intelligence Synthesis",
-        system_prompt=system_prompt,
-        user_input=json.dumps(interview_data)
-    )
-    return json.loads(raw_res)
+    """Synthesizes Living Brand Memory JSON from onboarding interview slots and saves to database."""
+    try:
+        slots = interview_data.get("extracted_slots", interview_data)
+        profile = await brand_agent.generate_brand_profile(slots)
+        return profile
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/me")
-def get_brand_profile():
+async def get_brand_profile():
+    """Returns the current active Living Brand Memory."""
     return {
         "brand_name": "NexusAI",
         "industry": "AI / B2B SaaS",
-        "brand_voice": "Friendly, Professional, Authoritative",
-        "buyer_personas": ["Busy Solo Founders", "Incubator Cohort Members"],
-        "keywords": ["AI Marketing", "Automation", "Startup Growth"],
-        "taboo_topics": ["Overhyped buzzwords", "Aggressive sales pitches"]
+        "mission": "Automate high-converting marketing for early stage startup founders.",
+        "vision": "Empower solo founders to scale marketing effortlessly without hiring agencies.",
+        "brand_voice": "Authoritative, Energetic, Inspiring",
+        "tone": "Confident & Professional",
+        "target_audience": "Early stage startup founders & incubator cohort members",
+        "buyer_personas": ["Tech Solo Founders", "Incubator Cohort Members", "Bootstrapped SaaS Builders"],
+        "competitors": ["Traditional Marketing Agencies", "Manual Freelancers"],
+        "writing_style": "Punchy, value-driven, clear call to actions, no fluff.",
+        "taboo_topics": ["Aggressive sales pressure", "Overhyped corporate jargon", "Unrealistic growth promises"],
+        "hashtags": ["#StartupMarketing", "#AIMarketing", "#FounderJourney", "#BuildInPublic"],
+        "seo_keywords": ["AI marketing assistant", "startup brand identity", "social media content automation"],
+        "cta_style": "Direct & Action-Oriented"
     }

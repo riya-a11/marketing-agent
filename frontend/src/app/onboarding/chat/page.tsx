@@ -20,27 +20,44 @@ export default function OnboardingChat() {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(25);
 
+  const [currentSlots, setCurrentSlots] = useState<Record<string, any>>({});
+
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
 
     const userMsg = input.trim();
-    setMessages((prev) => [...prev, { sender: "user", text: userMsg }]);
+    const newMessages: Message[] = [...messages, { sender: "user", text: userMsg }];
+    setMessages(newMessages);
     setInput("");
     setLoading(true);
 
     try {
+      const history = newMessages.map((m) => ({
+        role: m.sender === "user" ? "user" : "assistant",
+        content: m.text,
+      }));
+
       const res = await fetch("http://127.0.0.1:8000/api/v1/interview/message", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMsg }),
+        body: JSON.stringify({
+          message: userMsg,
+          history: history,
+          current_slots: currentSlots,
+        }),
       });
       const data = await res.json();
-      
+
       setMessages((prev) => [
         ...prev,
-        { sender: "ai", text: data.reply || "Thank you! Tell me more." },
+        { sender: "ai", text: data.reply || "Thank you! Tell me more about your startup." },
       ]);
-      if (data.completion_percentage) {
+
+      if (data.extracted_slots) {
+        setCurrentSlots(data.extracted_slots);
+      }
+
+      if (data.completion_percentage !== undefined) {
         setProgress(data.completion_percentage);
       } else {
         setProgress((prev) => Math.min(prev + 20, 100));
@@ -48,7 +65,7 @@ export default function OnboardingChat() {
     } catch (err) {
       setMessages((prev) => [
         ...prev,
-        { sender: "ai", text: "That sounds great! Who would you say is your ideal target audience or buyer persona?" },
+        { sender: "ai", text: "Got it! Who would you say is your primary target audience or buyer persona?" },
       ]);
       setProgress((prev) => Math.min(prev + 25, 100));
     } finally {
