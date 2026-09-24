@@ -1,0 +1,16 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+marketing_os.db
+.git
+.github
+*.log
+.coverage
+.pytest_cache/
+tests/
+test_*.py

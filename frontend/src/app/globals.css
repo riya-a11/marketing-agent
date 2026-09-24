@@ -1,26 +1,90 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --font-inter: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-fraunces: "Fraunces", Georgia, Cambria, "Times New Roman", Times, serif;
+    --font-caveat: "Caveat", "Segoe Script", "Comic Sans MS", cursive;
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background-color: #111215;
+    color: #FBF9F5;
+    font-family: var(--font-inter);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.font-serif {
+  font-family: var(--font-fraunces), Georgia, serif;
 }
+
+.font-sans {
+  font-family: var(--font-inter), sans-serif;
+}
+
+.font-script {
+  font-family: var(--font-caveat), cursive;
+}
+
+/* Authentic Mood Board Card Surfaces */
+.surface-card {
+  background-color: #16181D;
+  border: 1px solid #282C37;
+}
+
+.surface-card-elevated {
+  background-color: #1C1F26;
+  border: 1px solid #333846;
+}
+
+/* Editorial Light Mode Surfaces */
+.editorial-canvas {
+  background-color: #FBF9F5;
+  color: #16181D;
+}
+
+.editorial-card {
+  background-color: #FFFFFF;
+  border: 1px solid #EAE6DE;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+/* Tactile Button Press */
+.pressable {
+  transition: transform 120ms var(--ease-out), background-color 120ms ease, border-color 120ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pressable:hover {
+    transform: translateY(-1px);
+  }
+}
+
+.pressable:active {
+  transform: scale(0.975) translateY(0);
+}
+
+/* Minimalist Scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2D323E;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3F4555;
+}
+
