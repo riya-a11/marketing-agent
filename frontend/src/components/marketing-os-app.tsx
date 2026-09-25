@@ -55,7 +55,7 @@ import { getSavedTenantUser, firebaseSignOut } from "@/lib/firebase";
 
 type StudioStep = 1 | 2 | 3 | 4 | 5;
 type TabType = "studio" | "campaign-detail" | "calendar" | "analytics" | "brand-brain";
-type ActiveChannel = "linkedin" | "x" | "instagram" | "email";
+type ActiveChannel = "linkedin" | "x" | "instagram" | "youtube" | "email";
 type AppTheme = "dark" | "editorial";
 
 export default function MarketingOSApp() {
@@ -664,6 +664,14 @@ export default function MarketingOSApp() {
                       Instagram
                     </button>
                     <button
+                      onClick={() => setActiveChannel("youtube")}
+                      className={`px-3 py-1.5 rounded transition-colors ${
+                        activeChannel === "youtube" ? (isDark ? "bg-[#282C37] text-white" : "bg-white text-black shadow-xs font-medium") : textSecondary
+                      }`}
+                    >
+                      YouTube
+                    </button>
+                    <button
                       onClick={() => setActiveChannel("email")}
                       className={`px-3 py-1.5 rounded transition-colors ${
                         activeChannel === "email" ? (isDark ? "bg-[#282C37] text-white" : "bg-white text-black shadow-xs font-medium") : textSecondary
@@ -707,8 +715,36 @@ export default function MarketingOSApp() {
                   <div className={`md:col-span-7 rounded-xl p-6 border ${cardBg} space-y-4`}>
                     <div className={`flex items-center justify-between border-b ${borderSubtle} pb-3 text-xs`}>
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-xs text-[#0A66C2]">in</span>
-                        <span className={`font-semibold ${textPrimary}`}>LinkedIn Post</span>
+                        {activeChannel === "linkedin" && (
+                          <>
+                            <span className="font-bold text-xs text-[#0A66C2]">in</span>
+                            <span className={`font-semibold ${textPrimary}`}>LinkedIn Post</span>
+                          </>
+                        )}
+                        {activeChannel === "x" && (
+                          <>
+                            <span className="font-bold text-xs">X</span>
+                            <span className={`font-semibold ${textPrimary}`}>X (Twitter) Thread</span>
+                          </>
+                        )}
+                        {activeChannel === "instagram" && (
+                          <>
+                            <span className="font-bold text-xs text-[#E1306C]">IG</span>
+                            <span className={`font-semibold ${textPrimary}`}>Instagram Carousel</span>
+                          </>
+                        )}
+                        {activeChannel === "youtube" && (
+                          <>
+                            <span className="font-bold text-xs text-red-500">YT</span>
+                            <span className={`font-semibold ${textPrimary}`}>YouTube Shorts & Video</span>
+                          </>
+                        )}
+                        {activeChannel === "email" && (
+                          <>
+                            <span className="font-bold text-xs text-amber-500">@</span>
+                            <span className={`font-semibold ${textPrimary}`}>Email Briefing</span>
+                          </>
+                        )}
                       </div>
                       <button className={`flex items-center gap-1 ${textSecondary} hover:${textPrimary}`}>
                         <Edit className="w-3 h-3" />
@@ -950,6 +986,20 @@ export default function MarketingOSApp() {
                             Review media
                           </span>
                           <span className={`font-mono text-[11px] ${textSecondary}`}>Mar 13, 9:00 AM</span>
+                        </div>
+                      </div>
+
+                      {/* Channel 4: YouTube Shorts & Video */}
+                      <div className={`rounded-xl p-4 border ${cardBg} flex items-center justify-between text-xs`}>
+                        <div className="flex items-center gap-3">
+                          <span className={`w-5 h-5 rounded border ${cardElevated} font-bold text-[10px] text-red-500 flex items-center justify-center`}>YT</span>
+                          <span className={`font-medium ${textPrimary}`}>YouTube Shorts & Video</span>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 font-mono text-[10px]">
+                            Ready
+                          </span>
+                          <span className={`font-mono text-[11px] ${textSecondary}`}>Mar 13, 11:00 AM</span>
                         </div>
                       </div>
                     </div>

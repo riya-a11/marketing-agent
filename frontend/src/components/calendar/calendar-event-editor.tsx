@@ -193,6 +193,7 @@ export function CalendarEventEditor({
                     <option value="linkedin">LinkedIn</option>
                     <option value="x">X (Twitter)</option>
                     <option value="instagram">Instagram</option>
+                    <option value="youtube">YouTube</option>
                     <option value="email">Email</option>
                     <option value="video">Video</option>
                   </select>

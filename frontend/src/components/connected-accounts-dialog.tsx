@@ -35,7 +35,7 @@ export function ConnectedAccountsDialog({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const [manualPlatform, setManualPlatform] = useState<"linkedin" | "x" | "instagram" | null>(null);
+  const [manualPlatform, setManualPlatform] = useState<"linkedin" | "x" | "instagram" | "youtube" | null>(null);
   const [manualHandle, setManualHandle] = useState("");
   const [manualDisplayName, setManualDisplayName] = useState("");
 
@@ -144,6 +144,14 @@ export function ConnectedAccountsDialog({
       badge: "Visual Brand",
       description: "Publish carousels, behind-the-scenes engineering, and product graphics.",
     },
+    {
+      id: "youtube",
+      name: "YouTube Shorts & Video",
+      tag: "YT",
+      color: "text-[#FF0000]",
+      badge: "Video Media",
+      description: "Upload video storyboards, product demos, and executive shorts.",
+    },
   ];
 
   return (
@@ -241,7 +249,7 @@ export function ConnectedAccountsDialog({
                     ) : (
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => setManualPlatform(plat.id as "linkedin" | "x" | "instagram")}
+                          onClick={() => setManualPlatform(plat.id as "linkedin" | "x" | "instagram" | "youtube")}
                           className={`px-3 py-1.5 rounded-md text-xs font-mono border ${borderSubtle} hover:${textPrimary} ${textSecondary} transition-colors`}
                         >
                           Manual Handle
