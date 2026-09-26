@@ -49,13 +49,13 @@ export default function LandingPage() {
         <div className="flex items-center gap-3 text-xs">
           <Link
             href="/login"
-            className="px-4 py-2 rounded-md text-[#9FA4B2] hover:text-[#FBF9F5] transition-colors"
+            className="px-3.5 py-1.5 rounded-md border border-[#2D323E] hover:border-[#4B5263] bg-[#16181D] text-[#FBF9F5] hover:bg-[#1C1F26] transition-colors font-medium"
           >
-            Sign in
+            Log in
           </Link>
           <Link
             href="/dashboard"
-            className="px-4 py-2 rounded-md bg-[#F4EFE6] text-[#16181D] font-medium hover:bg-[#EAE3D2] transition-all pressable flex items-center gap-1.5"
+            className="px-4 py-1.5 rounded-md bg-[#F4EFE6] text-[#16181D] font-medium hover:bg-[#EAE3D2] transition-all pressable flex items-center gap-1.5"
           >
             <span>Get early access</span>
             <ArrowRight className="w-3.5 h-3.5" />

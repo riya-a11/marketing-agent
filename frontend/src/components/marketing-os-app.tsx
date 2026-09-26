@@ -41,6 +41,9 @@ import {
   Copy,
   Paperclip,
   Search,
+  Download,
+  Trash2,
+  FileDown,
 } from "lucide-react";
 import { AsterAvatar, type AsterMood } from "./aster-avatar";
 import { AsterChatDrawer } from "./aster-chat-drawer";
@@ -52,10 +55,17 @@ import {
   generateCampaignPackage,
   verifyClaims,
   multiPublish,
+  getCampaigns,
+  saveCampaign,
+  deleteCampaign,
+  getBrandProfile,
+  updateBrandProfile,
+  createCalendarEvent,
   type Angle,
   type CampaignPackage,
   type ClaimsGateResult,
   type PublishReceipt,
+  type StoredCampaign,
 } from "@/lib/api-client";
 import { getSavedTenantUser, firebaseSignOut } from "@/lib/firebase";
 
@@ -106,7 +116,22 @@ export default function MarketingOSApp() {
   const [accountsOpen, setAccountsOpen] = useState(false);
   const [connectedBanner, setConnectedBanner] = useState<string | null>(null);
 
+  // Campaigns Library & Persistence State
+  const [campaigns, setCampaigns] = useState<StoredCampaign[]>([]);
+  const [loadingCampaigns, setLoadingCampaigns] = useState(false);
+  const [campaignSearch, setCampaignSearch] = useState("");
+  const [campaignPlatformFilter, setCampaignPlatformFilter] = useState<string>("all");
+  const [campaignViewMode, setCampaignViewMode] = useState<"list" | "detail">("list");
+  const [selectedCampaign, setSelectedCampaign] = useState<StoredCampaign | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [calendarScheduledNotice, setCalendarScheduledNotice] = useState<string | null>(null);
+  const [copiedAllNotice, setCopiedAllNotice] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [brandProfile, setBrandProfile] = useState<Record<string, any> | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
   useEffect(() => {
+    setCurrentUser(getSavedTenantUser());
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const connectedPlatform = params.get("connected");
@@ -116,6 +141,38 @@ export default function MarketingOSApp() {
         window.history.replaceState({}, document.title, window.location.pathname);
       }
     }
+
+    async function loadInitialData() {
+      try {
+        setLoadingCampaigns(true);
+        const data = await getCampaigns();
+        if (data && Array.isArray(data)) {
+          setCampaigns(data);
+          if (data.length > 0) {
+            setSelectedCampaign(data[0]);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load campaigns:", err);
+      } finally {
+        setLoadingCampaigns(false);
+      }
+
+      try {
+        const bp = await getBrandProfile();
+        if (bp) {
+          setBrandProfile(bp);
+          const bpAny = bp as any;
+          if (bpAny.brand_facts && Array.isArray(bpAny.brand_facts)) {
+            setBrandFacts(bpAny.brand_facts);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load brand profile:", err);
+      }
+    }
+
+    loadInitialData();
   }, []);
 
   // Step 1: Tell us / What happened?
@@ -427,11 +484,253 @@ export default function MarketingOSApp() {
         platforms: ["linkedin", "x"],
         content_text: channelTexts.linkedin,
       });
+
+      // Auto-save to Campaigns history on publication
+      const angle = angles.find((a) => a.id === selectedAngleId);
+      const title = campaignPackage?.campaign_title || angle?.headline || "Multi-Channel Campaign";
+      const savedRes = await saveCampaign({
+        title: title,
+        content_type: angle?.tag || "Multi-Channel Campaign",
+        platform: "multi",
+        content_text: channelTexts.linkedin,
+        cta: "See live release",
+        style_label: angle?.tag || "Standard",
+        quality_score: 95,
+        status: "published",
+        channels: channelTexts,
+      });
+      if (savedRes && savedRes.campaign) {
+        setCampaigns((prev) => [savedRes.campaign, ...prev.filter((c) => c.id !== savedRes.campaign.id)]);
+      }
     } catch {
       // Graceful offline fallback
     } finally {
       setPublishing(false);
       setPublishSuccess(true);
+    }
+  };
+
+  // Explicit Save Campaign action
+  const handleSaveCampaign = async () => {
+    try {
+      const angle = angles.find((a) => a.id === selectedAngleId);
+      const title = campaignPackage?.campaign_title || angle?.headline || "Multi-Channel Campaign";
+      const payload: any = {
+        title: title,
+        content_type: angle?.tag || "Multi-Channel Campaign",
+        platform: "multi",
+        content_text: channelTexts.linkedin,
+        cta: "See live release",
+        style_label: angle?.tag || "Standard",
+        quality_score: 95,
+        status: "finalised",
+        channels: channelTexts,
+      };
+      const res = await saveCampaign(payload);
+      if (res && res.campaign) {
+        setCampaigns((prev) => [res.campaign, ...prev.filter((c) => c.id !== res.campaign.id)]);
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 2500);
+      }
+    } catch (err) {
+      console.error("Failed to save campaign:", err);
+    }
+  };
+
+  // Delete Campaign
+  const handleDeleteCampaign = async (id: string) => {
+    try {
+      await deleteCampaign(id);
+      setCampaigns((prev) => prev.filter((c) => c.id !== id));
+      if (selectedCampaign?.id === id) {
+        setSelectedCampaign(campaigns.find((c) => c.id !== id) || null);
+      }
+    } catch (err) {
+      console.error("Failed to delete campaign:", err);
+    }
+  };
+
+  // 1-Click Copy All Channels
+  const handleCopyAll = () => {
+    const fullText = `CAMPAIGN: ${campaignPackage?.campaign_title || angles.find((a) => a.id === selectedAngleId)?.headline || "Strategic Campaign Package"}
+Core Thesis: ${angles.find((a) => a.id === selectedAngleId)?.tag || "Customer Transformation"}
+
+==================================================
+LINKEDIN POST
+==================================================
+${channelTexts.linkedin}
+
+==================================================
+X / TWITTER POST
+==================================================
+${channelTexts.x}
+
+==================================================
+INSTAGRAM POST
+==================================================
+${channelTexts.instagram}
+
+==================================================
+EMAIL BROADCAST
+==================================================
+${channelTexts.email}
+
+==================================================
+YOUTUBE / VIDEO HOOK & SCENES
+==================================================
+${channelTexts.youtube}
+`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(fullText);
+      setCopiedAllNotice(true);
+      setTimeout(() => setCopiedAllNotice(false), 2500);
+    }
+  };
+
+  // Download Campaign Package as Markdown (.md)
+  const handleDownloadMarkdown = () => {
+    const title = campaignPackage?.campaign_title || angles.find((a) => a.id === selectedAngleId)?.headline || "Campaign_Package";
+    const filename = `${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.md`;
+    const fullText = `# ${title}
+> **Strategic Angle**: ${angles.find((a) => a.id === selectedAngleId)?.tag || "Customer Outcome"}
+> **Evidence Grounding**: ${angles.find((a) => a.id === selectedAngleId)?.evidence_used || "Verified Telemetry"}
+
+---
+
+## 💼 LinkedIn Post
+\`\`\`text
+${channelTexts.linkedin}
+\`\`\`
+
+---
+
+## 🐦 X (Twitter) Announcement
+\`\`\`text
+${channelTexts.x}
+\`\`\`
+
+---
+
+## 📸 Instagram Caption & Headline
+\`\`\`text
+${channelTexts.instagram}
+\`\`\`
+
+---
+
+## 📧 Customer Email Newsletter
+\`\`\`text
+${channelTexts.email}
+\`\`\`
+
+---
+
+## 🎬 Short-Form Video / YouTube Concept
+\`\`\`text
+${channelTexts.youtube}
+\`\`\`
+`;
+    const blob = new Blob([fullText], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Download Campaign Package as JSON
+  const handleDownloadJSON = () => {
+    const pkg = {
+      title: campaignPackage?.campaign_title || angles.find((a) => a.id === selectedAngleId)?.headline || "Campaign Package",
+      angle: angles.find((a) => a.id === selectedAngleId),
+      created_at: new Date().toISOString(),
+      channels: {
+        linkedin: channelTexts.linkedin,
+        x: channelTexts.x,
+        instagram: channelTexts.instagram,
+        email: channelTexts.email,
+        youtube: channelTexts.youtube,
+      },
+    };
+    const blob = new Blob([JSON.stringify(pkg, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `campaign-${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Schedule to Calendar
+  const handleScheduleToCalendar = async () => {
+    try {
+      const angle = angles.find((a) => a.id === selectedAngleId);
+      const title = campaignPackage?.campaign_title || angle?.headline || "Scheduled Campaign Post";
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(10, 0, 0, 0);
+
+      const ev = await createCalendarEvent({
+        title: title,
+        channel: activeChannel,
+        scheduled_at: tomorrow.toISOString(),
+        timezone: "Asia/Kolkata",
+        channel_payload: {
+          post_text: channelTexts[activeChannel],
+          caption: channelTexts.instagram,
+          cta: "Read full update",
+        },
+      });
+      if (ev) {
+        setCalendarScheduledNotice(`Scheduled for tomorrow at 10:00 AM on ${activeChannel.toUpperCase()}!`);
+        setTimeout(() => setCalendarScheduledNotice(null), 4000);
+      }
+    } catch (err) {
+      console.error("Failed to schedule event:", err);
+    }
+  };
+
+  // Brand Truth / Grounded Fact Handlers
+  const handleSaveBrandFact = async () => {
+    if (!newFactClaim.trim()) return;
+    const newFact = {
+      id: `f_${Date.now()}`,
+      claim: newFactClaim,
+      source: newFactSource || "Team Internal Verification",
+      status: newFactStatus,
+      date: "Just now",
+    };
+    const updatedFacts = [newFact, ...brandFacts];
+    setBrandFacts(updatedFacts);
+    setNewFactClaim("");
+    setNewFactSource("");
+    setIsAddFactOpen(false);
+
+    try {
+      await updateBrandProfile({
+        ...(brandProfile || {}),
+        brand_facts: updatedFacts,
+      });
+    } catch (err) {
+      console.error("Failed to persist brand fact:", err);
+    }
+  };
+
+  const handleDeleteBrandFact = async (factId: string) => {
+    const updatedFacts = brandFacts.filter((f) => f.id !== factId);
+    setBrandFacts(updatedFacts);
+    try {
+      await updateBrandProfile({
+        ...(brandProfile || {}),
+        brand_facts: updatedFacts,
+      });
+    } catch (err) {
+      console.error("Failed to delete brand fact:", err);
     }
   };
 
@@ -561,7 +860,33 @@ export default function MarketingOSApp() {
 
           <div className={`flex items-center gap-2 border-l ${borderSubtle} pl-3 text-xs ${textSecondary}`}>
             <span className="w-2 h-2 rounded-full bg-emerald-500" />
-            <span className="hidden sm:inline font-medium">Velo Dynamics</span>
+            <span className="hidden sm:inline font-medium">
+              {currentUser?.organizationName || currentUser?.displayName || "Velo Dynamics"}
+            </span>
+            <Link
+              href="/login"
+              title="Log In or Switch Workspace"
+              className={`px-2 py-0.5 rounded text-[11px] font-mono border transition-all ${
+                isDark
+                  ? "bg-[#1C1F26] border-[#2D323E] text-[#C8BBA8] hover:text-[#FBF9F5]"
+                  : "bg-white border-[#EAE6DE] text-[#6C7282] hover:text-[#16181D]"
+              }`}
+            >
+              {currentUser ? "Switch" : "Log In"}
+            </Link>
+            {currentUser && (
+              <button
+                type="button"
+                onClick={async () => {
+                  await firebaseSignOut();
+                  window.location.href = "/login";
+                }}
+                title="Sign out of workspace"
+                className="p-1 rounded text-[#9FA4B2] hover:text-rose-400 transition-colors"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -1380,7 +1705,41 @@ export default function MarketingOSApp() {
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between pt-6">
+                    {/* Action notification banners */}
+                    {calendarScheduledNotice && (
+                      <div className="mt-4 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between text-xs text-emerald-600 dark:text-emerald-400">
+                        <span>✓ {calendarScheduledNotice}</span>
+                        <button
+                          onClick={() => setActiveTab("calendar")}
+                          className="underline font-semibold hover:opacity-80 ml-2"
+                        >
+                          View in Calendar &rarr;
+                        </button>
+                      </div>
+                    )}
+
+                    {saveSuccess && (
+                      <div className="mt-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/30 flex items-center justify-between text-xs text-blue-600 dark:text-blue-400">
+                        <span>✓ Campaign package saved to your library!</span>
+                        <button
+                          onClick={() => {
+                            setActiveTab("campaign-detail");
+                            setCampaignViewMode("list");
+                          }}
+                          className="underline font-semibold hover:opacity-80 ml-2"
+                        >
+                          View in Campaigns &rarr;
+                        </button>
+                      </div>
+                    )}
+
+                    {copiedAllNotice && (
+                      <div className="mt-4 p-3 rounded-lg bg-purple-500/10 border border-purple-500/30 text-xs text-purple-600 dark:text-purple-400">
+                        <span>✓ All channel copy copied to clipboard with formatted headers!</span>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-6">
                       <button
                         onClick={() => setStudioStep(4)}
                         className={`text-xs ${textSecondary} hover:${textPrimary}`}
@@ -1388,22 +1747,56 @@ export default function MarketingOSApp() {
                         &larr; Back to claim check
                       </button>
 
-                      <div className="flex items-center gap-3">
+                      <div className="flex flex-wrap items-center gap-2">
                         <button
                           onClick={() => setAccountsOpen(true)}
                           className={`px-3 py-2 rounded border text-xs flex items-center gap-1.5 pressable ${cardElevated}`}
                           title="Manage connected social media channels"
                         >
                           <Share2 className="w-3.5 h-3.5 text-blue-500" />
-                          <span>Manage Channels</span>
+                          <span>Channels</span>
                         </button>
-                        <button className={`px-4 py-2 rounded border text-xs ${cardElevated}`}>
-                          Schedule for later
+
+                        <button
+                          onClick={handleCopyAll}
+                          className={`px-3 py-2 rounded border text-xs flex items-center gap-1.5 pressable ${cardElevated}`}
+                          title="Copy all channel copy"
+                        >
+                          <Copy className="w-3.5 h-3.5 text-amber-500" />
+                          <span>{copiedAllNotice ? "Copied All!" : "Copy All"}</span>
                         </button>
+
+                        <button
+                          onClick={handleDownloadMarkdown}
+                          className={`px-3 py-2 rounded border text-xs flex items-center gap-1.5 pressable ${cardElevated}`}
+                          title="Download Markdown package"
+                        >
+                          <FileDown className="w-3.5 h-3.5 text-emerald-500" />
+                          <span>Export .MD</span>
+                        </button>
+
+                        <button
+                          onClick={handleSaveCampaign}
+                          className={`px-3 py-2 rounded border text-xs flex items-center gap-1.5 pressable ${cardElevated}`}
+                          title="Save to database library"
+                        >
+                          <Bookmark className="w-3.5 h-3.5 text-purple-500" />
+                          <span>{saveSuccess ? "Saved!" : "Save"}</span>
+                        </button>
+
+                        <button
+                          onClick={handleScheduleToCalendar}
+                          className={`px-3 py-2 rounded border text-xs flex items-center gap-1.5 pressable ${cardElevated}`}
+                          title="Schedule in Master Calendar"
+                        >
+                          <CalendarIcon className="w-3.5 h-3.5 text-sky-500" />
+                          <span>Schedule</span>
+                        </button>
+
                         <button
                           onClick={handleApproveAndPublish}
                           disabled={publishing}
-                          className={`px-6 py-2 rounded font-medium text-xs transition-colors pressable ${btnPrimary}`}
+                          className={`px-5 py-2 rounded font-medium text-xs transition-colors pressable ${btnPrimary}`}
                         >
                           {publishing ? "Publishing..." : "Approve & Publish"}
                         </button>
@@ -1417,45 +1810,253 @@ export default function MarketingOSApp() {
         )}
 
         {/* =========================================================================
-            TAB 2: CAMPAIGN DETAIL PAGE (Screen 4 from Mood Board 2)
+            TAB 2: CAMPAIGN LIBRARY & DETAIL PAGE
            ========================================================================= */}
         {activeTab === "campaign-detail" && (
           <div className="space-y-6">
-            {/* Breadcrumb & Header */}
-            <div className="space-y-2">
-              <div className={`flex items-center gap-2 text-xs font-mono ${textSecondary}`}>
-                <span>Campaign</span>
-                <span>&gt;</span>
-                <span className={textPrimary}>70% Faster Data Sync</span>
-                <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-[10px]">
-                  &bull; Scheduled
-                </span>
+            {/* View Mode Toggle: All Campaigns Library vs Single Campaign Detail */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-black/5 dark:border-white/5 pb-4">
+              <div>
+                <h1 className={`font-serif text-3xl ${textPrimary}`}>
+                  {campaignViewMode === "list" ? "Campaigns Library" : (selectedCampaign?.title || "Campaign Detail")}
+                </h1>
+                <p className={`text-xs ${textSecondary} mt-1`}>
+                  {campaignViewMode === "list"
+                    ? `${campaigns.length} stored campaign packages across your multi-channel network.`
+                    : "Deep dive into multi-channel copy, evidence nodes, and distribution receipts."}
+                </p>
               </div>
 
-              <h1 className={`font-serif text-3xl ${textPrimary}`}>
-                70% Faster Data Synchronization
-              </h1>
-              <p className={`text-xs ${textSecondary}`}>
-                A technical deep dive into the architecture, tradeoffs, and results.
-              </p>
+              <div className="flex items-center gap-2">
+                <div className={`p-1 rounded-lg border ${cardElevated} flex items-center gap-1 text-xs`}>
+                  <button
+                    onClick={() => setCampaignViewMode("list")}
+                    className={`px-3 py-1.5 rounded transition-colors ${
+                      campaignViewMode === "list"
+                        ? `${btnPrimary} font-medium`
+                        : `${textSecondary} hover:${textPrimary}`
+                    }`}
+                  >
+                    All Campaigns ({campaigns.length})
+                  </button>
+                  <button
+                    onClick={() => setCampaignViewMode("detail")}
+                    className={`px-3 py-1.5 rounded transition-colors ${
+                      campaignViewMode === "detail"
+                        ? `${btnPrimary} font-medium`
+                        : `${textSecondary} hover:${textPrimary}`
+                    }`}
+                  >
+                    Campaign Detail
+                  </button>
+                </div>
+
+                {campaignViewMode === "detail" && (
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={handleCopyAll}
+                      className={`p-2 rounded border text-xs ${cardElevated}`}
+                      title="Copy all channels"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={handleDownloadMarkdown}
+                      className={`p-2 rounded border text-xs ${cardElevated}`}
+                      title="Export Markdown"
+                    >
+                      <FileDown className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={handleDownloadJSON}
+                      className={`p-2 rounded border text-xs ${cardElevated}`}
+                      title="Export JSON"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Campaign Sub-Tabs */}
-            <div className={`flex items-center gap-4 border-b ${borderSubtle} text-xs font-medium ${textSecondary}`}>
-              {(["overview", "content", "evidence", "performance", "activity"] as const).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setDetailSubTab(t)}
-                  className={`pb-2.5 capitalize transition-colors ${
-                    detailSubTab === t
-                      ? `${textPrimary} border-b-2 ${isDark ? "border-[#C8BBA8]" : "border-[#16181D]"} font-semibold`
-                      : "hover:opacity-80"
-                  }`}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
+            {/* LIST VIEW: All Stored Campaigns */}
+            {campaignViewMode === "list" && (
+              <div className="space-y-4">
+                {/* Search & Platform Filter Bar */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <div className="relative w-full sm:w-72">
+                    <Search className={`w-3.5 h-3.5 absolute left-3 top-3 ${textSecondary}`} />
+                    <input
+                      type="text"
+                      value={campaignSearch}
+                      onChange={(e) => setCampaignSearch(e.target.value)}
+                      placeholder="Search campaigns by keyword..."
+                      className={`w-full pl-9 pr-3 py-2 rounded-lg border text-xs outline-none ${
+                        isDark ? "bg-[#111215] border-[#2A2E39]" : "bg-white border-[#DDD8CE]"
+                      } ${textPrimary}`}
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-1.5 text-xs overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
+                    {(["all", "linkedin", "x", "instagram", "multi"] as const).map((plt) => (
+                      <button
+                        key={plt}
+                        onClick={() => setCampaignPlatformFilter(plt)}
+                        className={`px-3 py-1.5 rounded-full border text-[11px] capitalize transition-colors ${
+                          campaignPlatformFilter === plt
+                            ? `${btnPrimary} font-semibold`
+                            : `${cardBg} ${textSecondary} hover:${textPrimary}`
+                        }`}
+                      >
+                        {plt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Campaigns Grid */}
+                {loadingCampaigns ? (
+                  <div className={`p-12 text-center text-xs ${textSecondary}`}>
+                    Loading stored campaigns from database...
+                  </div>
+                ) : campaigns.length === 0 ? (
+                  <div className={`p-12 text-center rounded-xl border ${cardBg} space-y-3`}>
+                    <p className={`text-sm ${textPrimary}`}>No campaigns found.</p>
+                    <p className={`text-xs ${textSecondary}`}>Create your first story in the Studio!</p>
+                    <button
+                      onClick={() => {
+                        setActiveTab("studio");
+                        setStudioStep(1);
+                      }}
+                      className={`px-4 py-2 rounded text-xs font-medium ${btnPrimary}`}
+                    >
+                      Open Studio &rarr;
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {campaigns
+                      .filter((c) => {
+                        const matchesSearch =
+                          !campaignSearch ||
+                          c.title?.toLowerCase().includes(campaignSearch.toLowerCase()) ||
+                          c.content_text?.toLowerCase().includes(campaignSearch.toLowerCase());
+                        const matchesPlat =
+                          campaignPlatformFilter === "all" ||
+                          c.platform?.toLowerCase().includes(campaignPlatformFilter.toLowerCase());
+                        return matchesSearch && matchesPlat;
+                      })
+                      .map((c) => (
+                        <div
+                          key={c.id}
+                          className={`rounded-xl p-5 border ${cardBg} flex flex-col justify-between space-y-3 hover:border-slate-400 dark:hover:border-slate-600 transition-colors`}
+                        >
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="px-2 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 text-[10px] font-mono uppercase">
+                                {c.platform || "Multi"}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-mono text-[10px]">
+                                  {c.status || "Finalised"}
+                                </span>
+                                <span className={`text-[10px] font-mono ${textSecondary}`}>
+                                  {c.date || "Sep 2026"}
+                                </span>
+                              </div>
+                            </div>
+
+                            <h3 className={`font-serif text-base font-semibold ${textPrimary}`}>
+                              {c.title}
+                            </h3>
+
+                            <p className={`text-xs ${textSecondary} line-clamp-3 leading-relaxed`}>
+                              {c.content_text}
+                            </p>
+                          </div>
+
+                          <div className={`pt-3 border-t ${borderSubtle} flex items-center justify-between text-xs`}>
+                            <button
+                              onClick={() => {
+                                setSelectedCampaign(c);
+                                if (c.content_text) {
+                                  setChannelTexts((prev) => ({
+                                    ...prev,
+                                    linkedin: c.content_text || prev.linkedin,
+                                  }));
+                                }
+                                setCampaignViewMode("detail");
+                              }}
+                              className={`text-xs font-semibold ${scriptAccent} hover:underline`}
+                            >
+                              Inspect Details &rarr;
+                            </button>
+
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => {
+                                  if (navigator.clipboard) {
+                                    navigator.clipboard.writeText(c.content_text);
+                                    setCopiedId(c.id);
+                                    setTimeout(() => setCopiedId(null), 2000);
+                                  }
+                                }}
+                                className={`px-2.5 py-1 rounded border text-[11px] flex items-center gap-1 ${cardElevated}`}
+                                title="Copy campaign text"
+                              >
+                                <Copy className="w-3 h-3" />
+                                <span>{copiedId === c.id ? "Copied!" : "Copy"}</span>
+                              </button>
+
+                              <button
+                                onClick={() => handleDeleteCampaign(c.id)}
+                                className={`p-1.5 rounded hover:text-rose-500 text-slate-400 transition-colors`}
+                                title="Delete campaign"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* DETAIL VIEW: Single Active Campaign Subtabs */}
+            {campaignViewMode === "detail" && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className={`flex items-center gap-2 text-xs font-mono ${textSecondary}`}>
+                    <button
+                      onClick={() => setCampaignViewMode("list")}
+                      className="hover:underline flex items-center gap-1"
+                    >
+                      &larr; Back to all campaigns
+                    </button>
+                    <span>&bull;</span>
+                    <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-[10px]">
+                      {selectedCampaign?.status || "Ready"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className={`flex items-center gap-4 border-b ${borderSubtle} text-xs font-medium ${textSecondary}`}>
+                  {(["overview", "content", "evidence", "performance", "activity"] as const).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setDetailSubTab(t)}
+                      className={`pb-2.5 capitalize transition-colors ${
+                        detailSubTab === t
+                          ? `${textPrimary} border-b-2 ${isDark ? "border-[#C8BBA8]" : "border-[#16181D]"} font-semibold`
+                          : "hover:opacity-80"
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
 
             {/* Sub-tab 1: Overview */}
             {detailSubTab === "overview" && (
@@ -1637,6 +2238,8 @@ export default function MarketingOSApp() {
                   </div>
                 </div>
               </div>
+            )}
+            </div>
             )}
           </div>
         )}
@@ -1824,22 +2427,7 @@ export default function MarketingOSApp() {
                     </label>
                   </div>
                   <button
-                    onClick={() => {
-                      if (!newFactClaim.trim()) return;
-                      setBrandFacts((prev) => [
-                        {
-                          id: `f_${Date.now()}`,
-                          claim: newFactClaim,
-                          source: newFactSource || "Team Internal Verification",
-                          status: newFactStatus,
-                          date: "Just now",
-                        },
-                        ...prev,
-                      ]);
-                      setNewFactClaim("");
-                      setNewFactSource("");
-                      setIsAddFactOpen(false);
-                    }}
+                    onClick={handleSaveBrandFact}
                     className={`px-4 py-2 rounded text-xs font-medium ${btnPrimary}`}
                   >
                     Save Truth Node
@@ -1850,7 +2438,7 @@ export default function MarketingOSApp() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {brandFacts.map((f) => (
-                <div key={f.id} className={`rounded-xl p-5 border ${cardBg} space-y-2`}>
+                <div key={f.id} className={`rounded-xl p-5 border ${cardBg} space-y-2 relative group`}>
                   <div className="flex items-center justify-between text-xs">
                     {f.status === "verified" && (
                       <span className="text-emerald-500 font-mono text-[11px]">&check; Verified</span>
@@ -1861,7 +2449,16 @@ export default function MarketingOSApp() {
                     {f.status === "prohibited" && (
                       <span className="text-rose-500 font-mono text-[11px]">&times; Prohibited</span>
                     )}
-                    <span className={`${textSecondary} font-mono text-[10px]`}>{f.date}</span>
+                    <div className="flex items-center gap-2">
+                      <span className={`${textSecondary} font-mono text-[10px]`}>{f.date}</span>
+                      <button
+                        onClick={() => handleDeleteBrandFact(f.id)}
+                        title="Delete fact"
+                        className="opacity-0 group-hover:opacity-100 hover:text-rose-500 text-slate-400 transition-opacity p-0.5"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
                   </div>
                   <p className={`font-serif text-sm ${textPrimary} ${f.status === "prohibited" ? "line-through" : ""}`}>
                     {f.claim}

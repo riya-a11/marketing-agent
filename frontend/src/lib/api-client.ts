@@ -317,6 +317,43 @@ export function multiPublish(params: {
   });
 }
 
+// ---- Campaign Storage & Management -----------------------------------------
+
+export interface StoredCampaign {
+  id: string;
+  title: string;
+  content_type?: string;
+  type?: string;
+  platform: string;
+  content_text: string;
+  text?: string;
+  cta?: string;
+  style_label?: string;
+  quality_score?: number;
+  status: string;
+  date?: string;
+  created_at?: string;
+  channels?: Record<string, unknown>;
+  review_breakdown?: Record<string, unknown>;
+}
+
+export function getCampaigns() {
+  return fetchApi<StoredCampaign[]>("/api/v1/campaigns/");
+}
+
+export function saveCampaign(payload: Partial<StoredCampaign> & { content_text: string }) {
+  return fetchApi<{ status: string; campaign: StoredCampaign }>("/api/v1/campaigns/save", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteCampaign(campaignId: string) {
+  return fetchApi<{ status: string; id: string }>(`/api/v1/campaigns/${campaignId}`, {
+    method: "DELETE",
+  });
+}
+
 // ---- Email Marketing & Marketing Calendar Subsystems -----------------------
 
 export interface EmailCampaignContent {
