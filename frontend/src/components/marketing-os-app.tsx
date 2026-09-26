@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -39,6 +39,8 @@ import {
   Eye,
   Share2,
   Copy,
+  Paperclip,
+  Search,
 } from "lucide-react";
 import { AsterAvatar, type AsterMood } from "./aster-avatar";
 import { AsterChatDrawer } from "./aster-chat-drawer";
@@ -160,6 +162,149 @@ export default function MarketingOSApp() {
   const [newFactClaim, setNewFactClaim] = useState("");
   const [newFactSource, setNewFactSource] = useState("");
   const [newFactStatus, setNewFactStatus] = useState<"verified" | "needs_evidence" | "prohibited">("verified");
+
+  // Step 1: File, Link, and Notes integration states
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [attachedFiles, setAttachedFiles] = useState<Array<{ name: string; size: string }>>([]);
+  const [isLinkOpen, setIsLinkOpen] = useState(false);
+  const [linkInput, setLinkInput] = useState("");
+  const [attachedLinks, setAttachedLinks] = useState<string[]>([]);
+  const [isNotesOpen, setIsNotesOpen] = useState(false);
+  const [notesFilter, setNotesFilter] = useState("");
+  const [savedNotes, setSavedNotes] = useState([
+    {
+      id: "n1",
+      title: "Sync Engine v2 Architecture Changelog",
+      snippet: "Replaced periodic polling with bi-directional delta streams. Benchmark showed 70% latency drop and 40% memory reduction across high-concurrency clusters.",
+      tag: "Engineering",
+      date: "Yesterday"
+    },
+    {
+      id: "n2",
+      title: "Acme Corp Customer Case Study Notes",
+      snippet: "Acme Corp finance team reduced end-of-month reconciliation from 3 full business days to under 40 minutes with zero manual ledger mismatch.",
+      tag: "Customer Outcome",
+      date: "3 days ago"
+    },
+    {
+      id: "n3",
+      title: "Founder Reflection: First-Principles Rebuild",
+      snippet: "Why we spent 6 months rebuilding state synchronization from scratch rather than slapping another caching layer on a broken foundation.",
+      tag: "Founder Conviction",
+      date: "Last week"
+    },
+    {
+      id: "n4",
+      title: "Product Milestone: 10,000 Active Daily Devs",
+      snippet: "Our developer platform crossed 10,000 active daily developers across 45 countries, with 1.2M API requests processed per hour.",
+      tag: "Milestone",
+      date: "2 weeks ago"
+    }
+  ]);
+  const [newNoteTitle, setNewNoteTitle] = useState("");
+  const [newNoteBody, setNewNoteBody] = useState("");
+  const [isCreatingNote, setIsCreatingNote] = useState(false);
+
+  // Step 2: Edit Angle Modal
+  const [isEditAngleOpen, setIsEditAngleOpen] = useState(false);
+  const [customHeadline, setCustomHeadline] = useState("");
+  const [customRationale, setCustomRationale] = useState("");
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (content) {
+        setRawUpdate((prev) => {
+          const prefix = prev.trim() ? prev + "\n\n" : "";
+          return `${prefix}[Attached from ${file.name}]:\n${content.slice(0, 1000)}`;
+        });
+        setAttachedFiles((prev) => [
+          ...prev,
+          { name: file.name, size: `${Math.max(1, Math.round(file.size / 1024))} KB` },
+        ]);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  const handleRemoveFile = (fileName: string) => {
+    setAttachedFiles((prev) => prev.filter((f) => f.name !== fileName));
+  };
+
+  const handleAddLink = () => {
+    if (!linkInput.trim()) return;
+    const url = linkInput.trim().startsWith("http") ? linkInput.trim() : `https://${linkInput.trim()}`;
+    setAttachedLinks((prev) => [...prev, url]);
+    setRawUpdate((prev) => {
+      const prefix = prev.trim() ? prev + "\n\n" : "";
+      return `${prefix}Reference Link: ${url}`;
+    });
+    setLinkInput("");
+    setIsLinkOpen(false);
+  };
+
+  const handleRemoveLink = (url: string) => {
+    setAttachedLinks((prev) => prev.filter((l) => l !== url));
+  };
+
+  const handleInsertNote = (snippet: string) => {
+    setRawUpdate((prev) => {
+      const prefix = prev.trim() ? prev + "\n\n" : "";
+      return `${prefix}${snippet}`;
+    });
+    setIsNotesOpen(false);
+  };
+
+  const handleSaveCustomNote = () => {
+    if (!newNoteTitle.trim() || !newNoteBody.trim()) return;
+    setSavedNotes((prev) => [
+      {
+        id: `note_${Date.now()}`,
+        title: newNoteTitle.trim(),
+        snippet: newNoteBody.trim(),
+        tag: "Founder Note",
+        date: "Just now",
+      },
+      ...prev,
+    ]);
+    setRawUpdate((prev) => {
+      const prefix = prev.trim() ? prev + "\n\n" : "";
+      return `${prefix}${newNoteBody.trim()}`;
+    });
+    setNewNoteTitle("");
+    setNewNoteBody("");
+    setIsCreatingNote(false);
+    setIsNotesOpen(false);
+  };
+
+  const handleOpenEditAngle = () => {
+    const active = angles.find((a) => a.id === selectedAngleId);
+    if (active) {
+      setCustomHeadline(active.headline);
+      setCustomRationale(active.rationale);
+    }
+    setIsEditAngleOpen(true);
+  };
+
+  const handleSaveCustomAngle = () => {
+    if (!customHeadline.trim()) return;
+    setAngles((prev) =>
+      prev.map((a) =>
+        a.id === selectedAngleId
+          ? {
+              ...a,
+              headline: customHeadline.trim(),
+              rationale: customRationale.trim() || a.rationale,
+            }
+          : a
+      )
+    );
+    setIsEditAngleOpen(false);
+  };
 
   // Derive Aster's Mood dynamically from the current workflow state
   const getAsterMood = (): AsterMood => {
@@ -562,18 +707,114 @@ export default function MarketingOSApp() {
                       className={`w-full ${isDark ? "bg-[#111215] border-[#2A2E39]" : "bg-[#FBF9F5] border-[#D8D3C8]"} border rounded-lg p-4 text-sm ${textPrimary} outline-none focus:border-[#A8583C] leading-relaxed resize-none`}
                     />
 
+                    {/* Hidden Native File Input */}
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileSelect}
+                      accept=".txt,.md,.json,.csv,.doc,.docx"
+                      className="hidden"
+                    />
+
+                    {/* Attached Files & Links Badges */}
+                    {(attachedFiles.length > 0 || attachedLinks.length > 0) && (
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        {attachedFiles.map((f) => (
+                          <span
+                            key={f.name}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs border ${cardElevated} font-mono text-[11px]`}
+                          >
+                            <Paperclip className="w-3 h-3 text-indigo-400" />
+                            <span className="truncate max-w-[140px]">{f.name}</span>
+                            <span className={textSecondary}>({f.size})</span>
+                            <button
+                              onClick={() => handleRemoveFile(f.name)}
+                              className="ml-1 text-neutral-400 hover:text-rose-400"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ))}
+                        {attachedLinks.map((url) => (
+                          <span
+                            key={url}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs border ${cardElevated} font-mono text-[11px]`}
+                          >
+                            <Link2 className="w-3 h-3 text-sky-400" />
+                            <span className="truncate max-w-[180px]">{url}</span>
+                            <button
+                              onClick={() => handleRemoveLink(url)}
+                              className="ml-1 text-neutral-400 hover:text-rose-400"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Inline Link Attacher */}
+                    {isLinkOpen && (
+                      <div className={`p-2.5 rounded-lg border ${cardElevated} flex items-center gap-2 text-xs animate-in fade-in duration-150`}>
+                        <Link2 className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" />
+                        <input
+                          type="text"
+                          placeholder="Paste PR, changelog, or doc link (e.g. https://github.com/...)"
+                          value={linkInput}
+                          onChange={(e) => setLinkInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleAddLink();
+                            }
+                          }}
+                          className={`flex-1 p-1.5 rounded border ${isDark ? "bg-[#111215] border-[#2A2E39]" : "bg-white border-[#DDD8CE]"} ${textPrimary} outline-none text-xs`}
+                        />
+                        <button
+                          onClick={handleAddLink}
+                          disabled={!linkInput.trim()}
+                          className={`px-3 py-1.5 rounded text-xs font-medium pressable ${btnPrimary}`}
+                        >
+                          Attach
+                        </button>
+                        <button
+                          onClick={() => {
+                            setIsLinkOpen(false);
+                            setLinkInput("");
+                          }}
+                          className={`text-xs ${textSecondary} hover:${textPrimary} px-1.5`}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    )}
+
                     {/* Action Pills */}
                     <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
                       <div className="flex items-center gap-2 text-xs">
-                        <button className={`px-3 py-1.5 rounded border transition-colors flex items-center gap-1.5 ${cardElevated}`}>
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          className={`px-3 py-1.5 rounded border transition-colors pressable flex items-center gap-1.5 ${cardElevated} hover:opacity-90`}
+                          title="Attach document, benchmark log, or text file"
+                        >
                           <Plus className="w-3 h-3" />
                           <span>Add file</span>
                         </button>
-                        <button className={`px-3 py-1.5 rounded border transition-colors flex items-center gap-1.5 ${cardElevated}`}>
+                        <button
+                          onClick={() => setIsLinkOpen(!isLinkOpen)}
+                          className={`px-3 py-1.5 rounded border transition-colors pressable flex items-center gap-1.5 ${
+                            isLinkOpen ? "border-sky-500 text-sky-400 bg-sky-500/10" : cardElevated
+                          } hover:opacity-90`}
+                          title="Attach URL reference"
+                        >
                           <Link2 className="w-3 h-3" />
                           <span>Link</span>
                         </button>
-                        <button className={`px-3 py-1.5 rounded border transition-colors flex items-center gap-1.5 ${cardElevated}`}>
+                        <button
+                          onClick={() => setIsNotesOpen(true)}
+                          className={`px-3 py-1.5 rounded border transition-colors pressable flex items-center gap-1.5 ${cardElevated} hover:opacity-90`}
+                          title="Import from founder notes & interview log"
+                        >
                           <FolderOpen className="w-3 h-3" />
                           <span>Use from notes</span>
                         </button>
@@ -631,8 +872,12 @@ export default function MarketingOSApp() {
                       Here are different ways to tell this story, based on your update.
                     </p>
                   </div>
-                  <button className={`px-3 py-1.5 rounded border text-xs transition-colors ${cardElevated} self-start sm:self-auto`}>
-                    Edit angles
+                  <button
+                    onClick={handleOpenEditAngle}
+                    className={`px-3 py-1.5 rounded border text-xs transition-colors pressable ${cardElevated} hover:opacity-90 self-start sm:self-auto flex items-center gap-1.5`}
+                  >
+                    <Edit className="w-3 h-3" />
+                    <span>Edit angles</span>
                   </button>
                 </div>
 
@@ -1685,6 +1930,188 @@ export default function MarketingOSApp() {
         onClose={() => setAccountsOpen(false)}
         isDark={isDark}
       />
+
+      {/* Founder Notes Modal */}
+      {isNotesOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div
+            className={`w-full max-w-xl rounded-2xl border ${cardBg} shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200`}
+          >
+            {/* Header */}
+            <div className={`p-5 border-b ${borderSubtle} flex items-center justify-between ${cardElevated}`}>
+              <div className="flex items-center gap-2.5">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isDark ? "bg-[#252934] text-[#C8BBA8]" : "bg-[#F3EFE7] text-[#8B452B]"}`}>
+                  <FolderOpen className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className={`font-serif text-base font-semibold ${textPrimary}`}>Founder Knowledge &amp; Notes</h3>
+                  <p className={`text-[11px] ${textSecondary}`}>Select a saved note or log to populate your update</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setIsNotesOpen(false);
+                  setIsCreatingNote(false);
+                }}
+                className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 ${textSecondary} hover:${textPrimary}`}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Search & Actions Bar */}
+            <div className={`p-4 border-b ${borderSubtle} flex items-center justify-between gap-3 text-xs`}>
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${cardElevated} flex-1`}>
+                <Search className={`w-3.5 h-3.5 ${textSecondary}`} />
+                <input
+                  type="text"
+                  placeholder="Search notes or changelogs..."
+                  value={notesFilter}
+                  onChange={(e) => setNotesFilter(e.target.value)}
+                  className={`bg-transparent outline-none text-xs flex-1 ${textPrimary}`}
+                />
+              </div>
+              <button
+                onClick={() => setIsCreatingNote(!isCreatingNote)}
+                className={`px-3 py-1.5 rounded text-xs font-medium pressable flex items-center gap-1.5 ${
+                  isCreatingNote ? cardElevated : btnPrimary
+                }`}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>{isCreatingNote ? "Cancel" : "New Note"}</span>
+              </button>
+            </div>
+
+            {/* Create New Note Form */}
+            {isCreatingNote && (
+              <div className={`p-4 border-b ${borderSubtle} space-y-3 bg-amber-500/5`}>
+                <input
+                  type="text"
+                  placeholder="Note Title (e.g. Q3 Latency Sprint Benchmark)"
+                  value={newNoteTitle}
+                  onChange={(e) => setNewNoteTitle(e.target.value)}
+                  className={`w-full p-2.5 rounded-lg border ${isDark ? "bg-[#111215] border-[#2A2E39]" : "bg-white border-[#DDD8CE]"} ${textPrimary} text-xs outline-none`}
+                />
+                <textarea
+                  rows={3}
+                  placeholder="Write or paste your note snippet..."
+                  value={newNoteBody}
+                  onChange={(e) => setNewNoteBody(e.target.value)}
+                  className={`w-full p-2.5 rounded-lg border ${isDark ? "bg-[#111215] border-[#2A2E39]" : "bg-white border-[#DDD8CE]"} ${textPrimary} text-xs outline-none leading-relaxed resize-none`}
+                />
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={handleSaveCustomNote}
+                    disabled={!newNoteTitle.trim() || !newNoteBody.trim()}
+                    className={`px-4 py-1.5 rounded text-xs font-medium pressable ${btnPrimary}`}
+                  >
+                    Save &amp; Insert
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Notes List */}
+            <div className="p-4 overflow-y-auto space-y-3 flex-1">
+              {savedNotes
+                .filter(
+                  (n) =>
+                    !notesFilter ||
+                    n.title.toLowerCase().includes(notesFilter.toLowerCase()) ||
+                    n.snippet.toLowerCase().includes(notesFilter.toLowerCase())
+                )
+                .map((note) => (
+                  <div
+                    key={note.id}
+                    className={`p-4 rounded-xl border ${cardElevated} hover:border-[#A8583C] transition-all space-y-2`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-mono text-[10px]">
+                          {note.tag}
+                        </span>
+                        <span className={`font-serif font-semibold text-xs ${textPrimary}`}>
+                          {note.title}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handleInsertNote(note.snippet)}
+                        className={`px-3 py-1 rounded text-[11px] font-medium pressable ${btnPrimary}`}
+                      >
+                        Insert &rarr;
+                      </button>
+                    </div>
+                    <p className={`text-xs ${textSecondary} leading-relaxed line-clamp-3`}>
+                      {note.snippet}
+                    </p>
+                  </div>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Strategic Angle Modal */}
+      {isEditAngleOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div
+            className={`w-full max-w-lg rounded-2xl border ${cardBg} shadow-2xl overflow-hidden space-y-4 p-6 animate-in zoom-in-95 duration-200`}
+          >
+            <div className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-3">
+              <div className="flex items-center gap-2">
+                <Edit className="w-4 h-4 text-[#A8583C]" />
+                <h3 className={`font-serif text-base font-semibold ${textPrimary}`}>Edit Strategic Angle</h3>
+              </div>
+              <button
+                onClick={() => setIsEditAngleOpen(false)}
+                className={`p-1 rounded ${textSecondary} hover:${textPrimary}`}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="space-y-1">
+                <label className={textSecondary}>Angle Headline / Hook:</label>
+                <input
+                  type="text"
+                  value={customHeadline}
+                  onChange={(e) => setCustomHeadline(e.target.value)}
+                  placeholder="Enter strategic headline..."
+                  className={`w-full p-2.5 rounded-lg border ${isDark ? "bg-[#111215] border-[#2A2E39]" : "bg-white border-[#DDD8CE]"} ${textPrimary} outline-none text-xs`}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className={textSecondary}>Strategic Rationale &amp; Why It Wins:</label>
+                <textarea
+                  rows={3}
+                  value={customRationale}
+                  onChange={(e) => setCustomRationale(e.target.value)}
+                  placeholder="Why this angle resonates with your target audience..."
+                  className={`w-full p-2.5 rounded-lg border ${isDark ? "bg-[#111215] border-[#2A2E39]" : "bg-white border-[#DDD8CE]"} ${textPrimary} outline-none text-xs leading-relaxed resize-none`}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => setIsEditAngleOpen(false)}
+                className={`px-4 py-2 rounded text-xs ${cardElevated}`}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveCustomAngle}
+                disabled={!customHeadline.trim()}
+                className={`px-5 py-2 rounded text-xs font-medium pressable ${btnPrimary}`}
+              >
+                Save Angle
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
