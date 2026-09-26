@@ -120,7 +120,7 @@ export default function LoginPage() {
         setErrorMsg("Password is too weak. Please use at least 6 characters.");
       } else {
         // Fallback for offline development mode if Firebase is not provisioned
-        router.push("/dashboard");
+        router.push(mode === "signup" ? "/interview" : "/dashboard");
       }
     } finally {
       setLoading(false);

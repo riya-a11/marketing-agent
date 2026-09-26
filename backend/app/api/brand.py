@@ -9,7 +9,7 @@ router = APIRouter(prefix="/brand-profile", tags=["Brand Memory"])
 async def generate_brand_profile(interview_data: Dict[str, Any]):
     """Synthesizes Living Brand Memory JSON from onboarding interview slots and saves to database."""
     try:
-        slots = interview_data.get("extracted_slots", interview_data)
+        slots = interview_data.get("slots") or interview_data.get("extracted_slots") or interview_data
         profile = await brand_agent.generate_brand_profile(slots)
         return profile
     except Exception as e:

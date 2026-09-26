@@ -757,9 +757,17 @@ ${channelTexts.youtube}
       {/* Top Header Navigation */}
       <header className={`h-16 border-b ${borderSubtle} px-6 sm:px-10 flex items-center justify-between sticky top-0 z-40 ${isDark ? "bg-[#111215]/95" : "bg-[#FBF9F5]/95"} backdrop-blur-md`}>
         <div className="flex items-center gap-6">
-          <Link href="/" className={`font-serif font-bold text-lg ${textPrimary} flex items-center gap-2`}>
-            <span className={`${isDark ? "text-[#C8BBA8]" : "text-[#8B452B]"} font-sans font-black`}>M</span> Marketing OS
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/" className={`font-serif font-bold text-lg ${textPrimary} flex items-center gap-2`}>
+              <span className={`${isDark ? "text-[#C8BBA8]" : "text-[#8B452B]"} font-sans font-black`}>M</span> Marketing OS
+            </Link>
+            {brandProfile?.brand_name && (
+              <span className={`hidden lg:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-mono border ${cardElevated} ${textSecondary}`}>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                <span>{brandProfile.brand_name}</span>
+              </span>
+            )}
+          </div>
 
           {/* Tab Navigation */}
           <nav className={`hidden md:flex items-center gap-1 text-xs ${textSecondary}`}>
@@ -813,6 +821,16 @@ ${channelTexts.youtube}
             >
               Brand Truth
             </button>
+            <Link
+              href="/interview"
+              className={`px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5 ${
+                isDark ? "hover:bg-[#1C1F26] text-[#C8BBA8] hover:text-[#FBF9F5]" : "hover:bg-[#EAE6DE] text-[#8B452B]"
+              }`}
+              title="Launch conversational brand interview with Aster"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+              <span>Brand Interview</span>
+            </Link>
           </nav>
         </div>
 
@@ -931,6 +949,15 @@ ${channelTexts.youtube}
               <span>&bull;</span>
               <span className="text-emerald-500 font-semibold">+42% Engagement</span>
             </div>
+
+            <Link
+              href="/interview"
+              className={`px-3 py-1 rounded text-xs transition-colors pressable flex items-center gap-1.5 ${btnPrimary}`}
+              title="Train Aster on your brand via 3-min onboarding interview"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+              <span>{brandProfile?.brand_name ? "Brand Interview" : "Start Brand Interview"}</span>
+            </Link>
 
             {studioStep > 1 && activeTab === "studio" && (
               <button
@@ -2360,21 +2387,113 @@ ${channelTexts.youtube}
            ========================================================================= */}
         {activeTab === "brand-brain" && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h1 className={`font-serif text-3xl ${textPrimary}`}>Brand Truth Grounding</h1>
                 <p className={`text-xs ${textSecondary} mt-1`}>
                   The verified evidence foundation that Aster uses to write and check your stories.
                 </p>
               </div>
-              <button
-                onClick={() => setIsAddFactOpen(true)}
-                className={`px-3.5 py-1.5 rounded font-medium text-xs pressable flex items-center gap-1.5 ${btnPrimary}`}
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Add Verified Fact</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <Link
+                  href="/interview"
+                  className={`px-3.5 py-1.5 rounded font-medium text-xs pressable flex items-center gap-1.5 border ${cardElevated} hover:${textPrimary}`}
+                  title="Conduct conversational brand onboarding with Aster"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Brand Interview</span>
+                </Link>
+
+                <button
+                  onClick={() => setIsAddFactOpen(true)}
+                  className={`px-3.5 py-1.5 rounded font-medium text-xs pressable flex items-center gap-1.5 ${btnPrimary}`}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Verified Fact</span>
+                </button>
+              </div>
             </div>
+
+            {/* Brand Interview Quick-Launch Banner */}
+            <div className={`p-4 rounded-xl border ${cardElevated} flex flex-col sm:flex-row sm:items-center justify-between gap-4`}>
+              <div className="flex items-center gap-3">
+                <AsterAvatar mood="happy" size="sm" />
+                <div>
+                  <h3 className={`font-serif text-sm font-semibold ${textPrimary}`}>
+                    Adaptive Founder Onboarding Interview
+                  </h3>
+                  <p className={`text-xs ${textSecondary}`}>
+                    New startup or new product line? Chat with Aster to automatically extract your positioning, mission, buyer personas, and competitors.
+                  </p>
+                </div>
+              </div>
+              <Link
+                href="/interview"
+                className={`px-4 py-2 rounded font-medium text-xs pressable flex items-center justify-center gap-1.5 whitespace-nowrap ${btnPrimary}`}
+              >
+                <span>Launch Interview Room</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+
+            {/* Living Brand Memory Synthesis Card */}
+            {brandProfile && (
+              <div className={`p-6 rounded-xl border ${cardElevated} space-y-4`}>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-black/5 dark:border-white/5 gap-2">
+                  <div className="flex items-center gap-3">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                    <h2 className={`font-serif text-lg font-semibold ${textPrimary}`}>
+                      {brandProfile.brand_name || "Living Brand Profile"}
+                    </h2>
+                    {brandProfile.industry && (
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-mono border ${cardBg} ${textSecondary}`}>
+                        {brandProfile.industry}
+                      </span>
+                    )}
+                  </div>
+                  <Link
+                    href="/onboarding/brand-summary"
+                    className={`text-xs ${textSecondary} hover:${textPrimary} flex items-center gap-1 font-mono`}
+                  >
+                    <span>Full Brand Memory Card</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </Link>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                  <div className={`p-3.5 rounded-lg border ${cardBg} space-y-1`}>
+                    <span className={`text-[10px] font-mono uppercase ${textSecondary}`}>Mission & Problem</span>
+                    <p className={`text-xs ${textPrimary} leading-relaxed line-clamp-3`}>
+                      {brandProfile.mission || "Automates marketing for technical teams."}
+                    </p>
+                  </div>
+
+                  <div className={`p-3.5 rounded-lg border ${cardBg} space-y-1`}>
+                    <span className={`text-[10px] font-mono uppercase ${textSecondary}`}>Brand Voice & Tone</span>
+                    <p className="text-xs font-semibold text-purple-400">
+                      {brandProfile.brand_voice || "Authoritative & Clear"}
+                    </p>
+                    <p className={`text-[11px] ${textSecondary}`}>
+                      Tone: {brandProfile.tone || "Empathetic, data-backed"}
+                    </p>
+                  </div>
+
+                  <div className={`p-3.5 rounded-lg border ${cardBg} space-y-1`}>
+                    <span className={`text-[10px] font-mono uppercase ${textSecondary}`}>Target Buyer Personas</span>
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {(Array.isArray(brandProfile.buyer_personas) && brandProfile.buyer_personas.length > 0
+                        ? brandProfile.buyer_personas
+                        : [brandProfile.target_audience || "Early Stage Founders"]
+                      ).map((p: string, idx: number) => (
+                        <span key={idx} className="px-2 py-0.5 rounded bg-sky-500/10 text-sky-400 text-[10px] font-medium border border-sky-500/20">
+                          {p}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Add Fact Inline Form Modal */}
             {isAddFactOpen && (

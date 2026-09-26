@@ -1,12 +1,26 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+import logging
 from app.config import settings
 from app.api import auth, interview, brand, content, campaigns, video, chat, media, social_auth, calendar, approvals, worker_api, system_api
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Auto-initializes SQLite database tables and migrations on boot for fresh clones."""
+    try:
+        from app.storage.db import init_db
+        init_db()
+        logging.getLogger("uvicorn").info("Marketing OS local SQLite database auto-initialized successfully.")
+    except Exception as e:
+        logging.getLogger("uvicorn").error(f"Failed to auto-initialize database on startup: {e}")
+    yield
 
 app = FastAPI(
     title=settings.APP_NAME,
     description="Backend API for AI Marketing Operating System",
-    version="4.0.0"
+    version="4.0.0",
+    lifespan=lifespan
 )
 
 from starlette.middleware.base import BaseHTTPMiddleware

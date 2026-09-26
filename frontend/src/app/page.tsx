@@ -80,19 +80,19 @@ export default function LandingPage() {
         {/* CTA Buttons */}
         <div className="flex flex-wrap items-center justify-center gap-4 mb-14">
           <Link
-            href="/dashboard"
+            href="/interview"
             className="px-7 py-3 rounded-md bg-[#F4EFE6] text-[#16181D] font-medium hover:bg-[#EAE3D2] transition-all pressable flex items-center gap-2 text-sm shadow-md"
           >
-            <span>Get early access</span>
+            <span>Start Brand Interview (3 min)</span>
             <ArrowRight className="w-4 h-4" />
           </Link>
 
           <Link
-            href="/interview"
+            href="/dashboard"
             className="px-6 py-3 rounded-md bg-[#1C1F26] border border-[#2D323E] text-[#FBF9F5] text-sm hover:bg-[#232731] transition-all pressable flex items-center gap-2"
           >
-            <Play className="w-3.5 h-3.5 fill-current" />
-            <span>Watch a 2 min demo</span>
+            <Sparkles className="w-3.5 h-3.5 text-[#C8BBA8]" />
+            <span>Open Studio Flywheel</span>
           </Link>
         </div>
 

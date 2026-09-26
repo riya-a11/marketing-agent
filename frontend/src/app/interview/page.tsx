@@ -71,34 +71,39 @@ export default function InterviewPage() {
       const res = await sendInterviewMessage({
         message: userText,
         history: newMessages.map((m) => ({ role: m.role, content: m.content })),
+        current_slots: slots,
       });
 
-      const replyText = res.reply;
-      if (res && replyText) {
+      const replyText = res?.reply;
+      if (replyText) {
         setMessages([...newMessages, { role: "assistant", content: replyText }]);
         if (res.extracted_slots) {
-          setSlots((prev) => ({ ...prev, ...res.extracted_slots }));
+          const cleanSlots: Record<string, string> = {};
+          for (const [k, v] of Object.entries(res.extracted_slots)) {
+            if (v && typeof v === "string" && v.trim() && v.trim().toLowerCase() !== "null") {
+              cleanSlots[k] = v.trim();
+            }
+          }
+          setSlots((prev) => ({ ...prev, ...cleanSlots }));
           setCompletionPercentage(res.completion_percentage || 50);
         }
       }
     } catch {
       // Fallback response for offline demo
-      setTimeout(() => {
-        setMessages([
-          ...newMessages,
-          {
-            role: "assistant",
-            content: "Got it! That gives us a crisp foundation. What is the one key metric or customer result that proves this works?",
-          },
-        ]);
-        setSlots((prev) => ({
-          ...prev,
-          brand_name: prev.brand_name || "Velo Dynamics",
-          mission: prev.mission || "Fast, automated invoice reconciliation.",
-          target_audience: prev.target_audience || "Enterprise Finance Teams",
-        }));
-        setCompletionPercentage(75);
-      }, 500);
+      setMessages([
+        ...newMessages,
+        {
+          role: "assistant",
+          content: "Got it! That gives us a crisp foundation. What is the one key metric or customer result that proves this works?",
+        },
+      ]);
+      setSlots((prev) => ({
+        ...prev,
+        brand_name: prev.brand_name || "NexusAI",
+        mission: prev.mission || "Fast, automated marketing for early-stage startup founders.",
+        target_audience: prev.target_audience || "Enterprise Finance Teams & Tech Founders",
+      }));
+      setCompletionPercentage(75);
     } finally {
       setLoading(false);
     }
@@ -107,19 +112,22 @@ export default function InterviewPage() {
   const handleFinishOnboarding = async () => {
     setGeneratingProfile(true);
     try {
+      const brandPayload = {
+        brand_name: slots.brand_name || "NexusAI",
+        industry: slots.industry || "AI / B2B SaaS",
+        mission: slots.mission || "Automate high-converting marketing for early stage startup founders.",
+        target_audience: slots.target_audience || "Early stage startup founders & incubator cohort members",
+        brand_voice: slots.brand_voice || "Authoritative, data-backed, clear",
+        competitors: slots.competitors || "Traditional marketing agencies",
+      };
       await generateBrandProfile({
-        slots: {
-          brand_name: slots.brand_name || "Velo Dynamics",
-          industry: slots.industry || "B2B SaaS / FinTech",
-          mission: slots.mission || "Eliminate manual invoice reconciliation friction.",
-          target_audience: slots.target_audience || "Enterprise Finance Teams",
-          brand_voice: slots.brand_voice || "Authoritative, data-backed, clear",
-          competitors: slots.competitors || "Traditional ERP spreadsheets",
-        },
+        slots: brandPayload,
+        extracted_slots: brandPayload,
+        ...brandPayload,
       });
-      router.push("/dashboard");
+      router.push("/onboarding/brand-summary");
     } catch {
-      router.push("/dashboard");
+      router.push("/onboarding/brand-summary");
     } finally {
       setGeneratingProfile(false);
     }

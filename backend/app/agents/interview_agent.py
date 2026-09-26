@@ -41,6 +41,18 @@ LATEST FOUNDER MESSAGE:
         try:
             raw = await self.provider.chat(system_prompt, user_input_payload)
             data = extract_and_parse_json(raw)
+            if data and isinstance(data, dict):
+                merged_slots = dict(slots)
+                ext = data.get("extracted_slots", {})
+                if isinstance(ext, dict):
+                    for k, v in ext.items():
+                        if v and str(v).strip() and str(v).lower() != "null":
+                            merged_slots[k] = v
+                data["extracted_slots"] = merged_slots
+                filled_count = len([k for k, v in merged_slots.items() if v])
+                data["completion_percentage"] = int((filled_count / len(ALL_SLOTS)) * 100)
+                data["missing_slots"] = [s for s in ALL_SLOTS if not merged_slots.get(s)]
+                return data
             return data
         except Exception as e:
             logger.warning(f"Fallback to intelligent turn processor: {e}")

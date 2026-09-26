@@ -49,8 +49,17 @@ class Settings(BaseSettings):
     }
     JWT_SECRET: str = "marketing_os_jwt_session_signing_secret_key_2026"
 
-    # CORS Policy Settings
-    ALLOWED_ORIGINS: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    # CORS Policy Settings (Supports standard and fallback local dev ports)
+    ALLOWED_ORIGINS: list[str] = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+        "http://localhost:3002",
+        "http://127.0.0.1:3002",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
 
     # Redis Distributed Queue Settings
     REDIS_URL: str = "redis://localhost:6379/0"
