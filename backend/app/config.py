@@ -20,20 +20,33 @@ class Settings(BaseSettings):
     MEDIA_PUBLIC_BASE_URL: str = "http://127.0.0.1:8000"
     MAX_MEDIA_FILE_SIZE: int = 50 * 1024 * 1024  # 50 MB
     
-    # Social Media Platform Live Credentials (Optional - Mock mode active if empty)
+    # Social Media Platform Live Credentials & Exact Redirect URIs
+    SOCIAL_PROVIDER_MODE: str = "mock"  # "mock" | "live"
     LINKEDIN_CLIENT_ID: str = ""
     LINKEDIN_CLIENT_SECRET: str = ""
+    LINKEDIN_REDIRECT_URI: str = "http://127.0.0.1:8000/api/v1/social-auth/linkedin/callback"
     
     X_CLIENT_ID: str = ""
     X_CLIENT_SECRET: str = ""
+    X_REDIRECT_URI: str = "http://127.0.0.1:8000/api/v1/social-auth/x/callback"
     X_BEARER_TOKEN: str = ""
     
     INSTAGRAM_APP_ID: str = ""
     INSTAGRAM_APP_SECRET: str = ""
+    INSTAGRAM_REDIRECT_URI: str = "http://127.0.0.1:8000/api/v1/social-auth/instagram/callback"
     META_ACCESS_TOKEN: str = ""
 
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    YOUTUBE_REDIRECT_URI: str = "http://127.0.0.1:8000/api/v1/social-auth/youtube/callback"
+
     # Security & Token Encryption Settings (Multi-Tenant OAuth Protection)
+    ACTIVE_KEY_VERSION: str = "v2"
     TOKEN_ENCRYPTION_KEY: str = "super_secret_marketing_os_token_encryption_key_32bytes!"
+    TOKEN_ENCRYPTION_KEY_RING: dict[str, str] = {
+        "v2": "super_secret_marketing_os_token_encryption_key_32bytes!",
+        "v1": "legacy_marketing_os_encryption_key_32bytes_v1!"
+    }
     JWT_SECRET: str = "marketing_os_jwt_session_signing_secret_key_2026"
 
     # CORS Policy Settings
@@ -74,6 +87,10 @@ class Settings(BaseSettings):
                 raise RuntimeError("FATAL CRITICAL: Production cannot start with default TOKEN_ENCRYPTION_KEY.")
             if len(self.TOKEN_ENCRYPTION_KEY.encode("utf-8")) < 32:
                 raise RuntimeError("FATAL CRITICAL: Production TOKEN_ENCRYPTION_KEY must have at least 32 bytes of entropy.")
+
+            # 3. P0 Invariant: Prohibition of Mock Mode in Production
+            if self.SOCIAL_PROVIDER_MODE.lower() == "mock":
+                raise RuntimeError("FATAL CRITICAL: Production cannot start with SOCIAL_PROVIDER_MODE='mock'. All production providers must use live OAuth.")
 
 settings = Settings()
 settings.validate_production_invariants()

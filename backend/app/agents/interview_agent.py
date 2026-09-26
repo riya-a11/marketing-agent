@@ -37,9 +37,10 @@ LATEST FOUNDER MESSAGE:
 "{user_message}"
 """
 
+        from app.utils.json_helper import extract_and_parse_json
         try:
             raw = await self.provider.chat(system_prompt, user_input_payload)
-            data = json.loads(raw)
+            data = extract_and_parse_json(raw)
             return data
         except Exception as e:
             logger.warning(f"Fallback to intelligent turn processor: {e}")

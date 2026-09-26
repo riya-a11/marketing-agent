@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from typing import Dict, Any
 from app.agents.brand_agent import brand_agent
+from app.storage.db import get_active_brand_profile, save_brand_profile
 
 router = APIRouter(prefix="/brand-profile", tags=["Brand Memory"])
 
@@ -16,7 +17,11 @@ async def generate_brand_profile(interview_data: Dict[str, Any]):
 
 @router.get("/me")
 async def get_brand_profile():
-    """Returns the current active Living Brand Memory."""
+    """Returns the current active Living Brand Memory from persistent database or default fallback."""
+    profile = get_active_brand_profile()
+    if profile:
+        return profile
+    
     return {
         "brand_name": "NexusAI",
         "industry": "AI / B2B SaaS",
@@ -33,3 +38,9 @@ async def get_brand_profile():
         "seo_keywords": ["AI marketing assistant", "startup brand identity", "social media content automation"],
         "cta_style": "Direct & Action-Oriented"
     }
+
+@router.put("/me")
+async def update_brand_profile(updated_data: Dict[str, Any]):
+    """Updates and persists the active Living Brand Memory."""
+    saved = save_brand_profile(updated_data)
+    return saved

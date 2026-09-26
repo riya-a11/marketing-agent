@@ -40,9 +40,10 @@ FOUNDER PREFERENCES:
 - Aspect Ratio: 9:16 (Vertical Reel)
 """
 
+        from app.utils.json_helper import extract_and_parse_json
         try:
             raw_res = await self.provider.chat(system_prompt, formatted_user_prompt)
-            return json.loads(raw_res)
+            return extract_and_parse_json(raw_res)
         except Exception as e:
             logger.warning(f"Fallback to structured mock storyboard due to parsing format: {e}")
             return {

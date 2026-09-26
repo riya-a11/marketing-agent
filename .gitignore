@@ -20,3 +20,9 @@ dist/
 Thumbs.db
 .vscode/
 .idea/
+
+# Local databases and uploads
+*.db
+*.sqlite3
+backend/static/uploads/
+

@@ -25,9 +25,10 @@ class BrandAgent:
         system_prompt = (PROMPTS_DIR / "brand.md").read_text(encoding="utf-8")
         user_payload = f"INTERVIEW EXTRACTED SLOTS:\n{json.dumps(interview_slots, indent=2)}"
 
+        from app.utils.json_helper import extract_and_parse_json
         try:
             raw = await self.provider.chat(system_prompt, user_payload)
-            brand_memory = json.loads(raw)
+            brand_memory = extract_and_parse_json(raw)
         except Exception as e:
             logger.warning(f"Fallback to brand memory synthesis: {e}")
             brand_memory = {
@@ -46,6 +47,14 @@ class BrandAgent:
                 "seo_keywords": ["AI marketing assistant", "startup brand identity", "social media content automation"],
                 "cta_style": "Direct & Action-Oriented"
             }
+
+        # Save to persistent local storage
+        try:
+            from app.storage.db import save_brand_profile
+            save_brand_profile(brand_memory, profile_id="default-profile")
+            logger.info("Persisted brand memory profile to local database.")
+        except Exception as e:
+            logger.warning(f"Could not persist brand memory to local storage: {e}")
 
         # Save to Supabase database if connected
         if supabase:

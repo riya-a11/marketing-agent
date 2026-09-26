@@ -63,6 +63,14 @@ app.include_router(system_api.router, prefix="/system/v1")
 
 # Alias /api/v1 for backwards compatibility if needed
 app.include_router(auth.router, prefix="/api/v1")
+app.include_router(interview.router, prefix="/api/v1")
+app.include_router(brand.router, prefix="/api/v1")
+app.include_router(content.router, prefix="/api/v1")
+app.include_router(campaigns.router, prefix="/api/v1")
+app.include_router(video.router, prefix="/api/v1")
+app.include_router(chat.router, prefix="/api/v1")
+app.include_router(media.router, prefix="/api/v1")
+app.include_router(social_auth.router, prefix="/api/v1")
 app.include_router(calendar.router, prefix="/api/v1")
 app.include_router(approvals.router, prefix="/api/v1")
 

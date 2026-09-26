@@ -16,18 +16,17 @@ async def create_storyboard(req: VideoStoryboardRequest):
 
 @router.post("/render")
 async def render_video(req: VideoRenderRequest):
-    """Triggers multi-provider video rendering (Google Veo / NVIDIA Cosmos / Mock) + OpenMontage assembly."""
+    """Triggers multi-provider video rendering (Google Veo / Google Flow / OpenMontage)."""
     try:
         raw_clips = await render_video_job(req.provider_name, req.storyboard.dict())
-        montage_result = await assemble_reel(req.storyboard.dict())
         
         return {
             "status": "completed",
             "provider": raw_clips["provider"],
             "aspect_ratio": "9:16",
-            "video_url": montage_result["output_video_url"],
+            "video_url": raw_clips["video_url"],
             "rendering": raw_clips,
-            "montage_assembly": montage_result
+            "montage_assembly": raw_clips.get("montage", {})
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

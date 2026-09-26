@@ -1,0 +1,241 @@
+{
+  "name": "Marketing OS - Multi-Platform Campaign Publisher",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "publish-campaign",
+        "options": {
+          "responseMode": "responseNode"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "id": "webhook-trigger-node",
+      "name": "Webhook: Marketing OS Trigger",
+      "webhookId": "publish-campaign"
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.body.platforms && $json.body.platforms.length > 0 ? $json.body.platforms[0].platform : ($json.body.platform || 'linkedin') }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "linkedin",
+              "output": 0
+            },
+            {
+              "value2": "x",
+              "output": 1
+            },
+            {
+              "value2": "facebook",
+              "output": 2
+            },
+            {
+              "value2": "instagram",
+              "output": 3
+            }
+          ]
+        },
+        "fallbackOutput": 0
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        460,
+        300
+      ],
+      "id": "platform-switch-node",
+      "name": "Route by Platform"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.linkedin.com/rest/posts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"author\": \"urn:li:person:YOUR_LINKEDIN_URN\",\n  \"commentary\": \"{{ $json.body.content ? $json.body.content.text : $json.body.content_text }}\",\n  \"visibility\": \"PUBLIC\",\n  \"distribution\": {\n    \"feedDistribution\": \"MAIN_FEED\"\n  },\n  \"lifecycleState\": \"PUBLISHED\"\n}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        140
+      ],
+      "id": "linkedin-post-node",
+      "name": "LinkedIn API: Posts API"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.twitter.com/2/tweets",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \"{{ $json.body.content ? $json.body.content.text : $json.body.content_text }}\"\n}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        280
+      ],
+      "id": "twitter-post-node",
+      "name": "X / Twitter API: Send Tweet"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v19.0/me/feed",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"message\": \"{{ $json.body.content ? $json.body.content.text : $json.body.content_text }}\"\n}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        420
+      ],
+      "id": "meta-facebook-node",
+      "name": "Meta Graph API: Facebook Page"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v19.0/YOUR_IG_USER_ID/media",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"caption\": \"{{ $json.body.content ? $json.body.content.text : $json.body.content_text }}\",\n  \"media_type\": \"IMAGE\",\n  \"image_url\": \"{{ $json.body.media && $json.body.media.length > 0 ? $json.body.media[0].url : $json.body.media_url }}\"\n}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        560
+      ],
+      "id": "instagram-media-node",
+      "name": "Instagram Graph API: Container Post"
+    },
+    {
+      "parameters": {
+        "options": {},
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"success\",\n  \"published\": true,\n  \"campaign_id\": \"{{ $json.body.campaign_id }}\",\n  \"mode\": \"n8n\",\n  \"executed_at\": \"{{ $now.toISO() }}\"\n}"
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        980,
+        300
+      ],
+      "id": "response-node",
+      "name": "Respond to Marketing OS"
+    }
+  ],
+  "connections": {
+    "Webhook: Marketing OS Trigger": {
+      "main": [
+        [
+          {
+            "node": "Route by Platform",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Platform": {
+      "main": [
+        [
+          {
+            "node": "LinkedIn API: Posts API",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "X / Twitter API: Send Tweet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Meta Graph API: Facebook Page",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Instagram Graph API: Container Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LinkedIn API: Posts API": {
+      "main": [
+        [
+          {
+            "node": "Respond to Marketing OS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "X / Twitter API: Send Tweet": {
+      "main": [
+        [
+          {
+            "node": "Respond to Marketing OS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Meta Graph API: Facebook Page": {
+      "main": [
+        [
+          {
+            "node": "Respond to Marketing OS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Instagram Graph API: Container Post": {
+      "main": [
+        [
+          {
+            "node": "Respond to Marketing OS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

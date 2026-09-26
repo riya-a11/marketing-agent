@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -63,6 +63,19 @@ export default function MarketingOSApp() {
   const [studioStep, setStudioStep] = useState<StudioStep>(1);
   const [theme, setTheme] = useState<AppTheme>("editorial"); // Default to Mood Board 1's warm editorial style
   const [accountsOpen, setAccountsOpen] = useState(false);
+  const [connectedBanner, setConnectedBanner] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const connectedPlatform = params.get("connected");
+      if (connectedPlatform) {
+        setConnectedBanner(`Successfully connected your ${connectedPlatform.toUpperCase()} account via OAuth!`);
+        // Clean URL query parameters
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
+  }, []);
 
   // Step 1: Tell us / What happened?
   const [rawUpdate, setRawUpdate] = useState(
@@ -291,6 +304,22 @@ export default function MarketingOSApp() {
           </div>
         </div>
       </header>
+
+      {/* OAuth Connection Status Banner */}
+      {connectedBanner && (
+        <div className="bg-emerald-500/10 border-b border-emerald-500/20 px-6 py-2.5 text-xs text-emerald-500 flex items-center justify-between">
+          <div className="flex items-center gap-2 max-w-6xl mx-auto w-full">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span className="font-medium">{connectedBanner}</span>
+            <button
+              onClick={() => setConnectedBanner(null)}
+              className="ml-auto text-emerald-500 hover:text-emerald-400 p-1"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
 
       {/* SUB-HEADER: Aster Welcome Banner (Matching Mood Board 3) */}

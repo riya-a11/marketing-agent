@@ -5,43 +5,25 @@ from app.config import settings
 logger = logging.getLogger("llm_base")
 
 class BaseLLMClient:
-    """Provider-independent LLM Client abstraction with fallback mock."""
+    """Provider-independent LLM Client abstraction with fallback order: NIM -> Gemini -> OpenAI -> Mock."""
     
     def __init__(self):
-        self.openai_key = settings.OPENAI_API_KEY
         self.nim_key = settings.NVIDIA_NIM_API_KEY
         self.gemini_key = settings.GEMINI_API_KEY
+        self.openai_key = settings.OPENAI_API_KEY
 
     async def generate_response(self, system_prompt: str, user_prompt: str) -> str:
-        # Check if real keys exist, otherwise fall back gracefully to intelligent mock
-        if self.openai_key:
-            return await self._call_openai(system_prompt, user_prompt)
-        elif self.nim_key:
+        if self.nim_key:
             return await self._call_nvidia_nim(system_prompt, user_prompt)
+        elif self.gemini_key:
+            return await self._call_gemini(system_prompt, user_prompt)
+        elif self.openai_key:
+            return await self._call_openai(system_prompt, user_prompt)
         else:
             logger.info("No API key configured - running in Provider-Independent Mock Mode")
             return self._mock_fallback(system_prompt, user_prompt)
 
-    async def _call_openai(self, system_prompt: str, user_prompt: str) -> str:
-        headers = {
-            "Authorization": f"Bearer {self.openai_key}",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "model": "gpt-4o-mini",
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "content", "content": user_prompt}
-            ]
-        }
-        async with httpx.AsyncClient() as client:
-            res = await client.post("https://api.openai.com/v1/chat/completions", json=payload, headers=headers)
-            res.raise_for_status()
-            data = res.json()
-            return data["choices"][0]["message"]["content"]
-
     async def _call_nvidia_nim(self, system_prompt: str, user_prompt: str) -> str:
-        # NVIDIA NIM OpenAI-compatible endpoint
         headers = {
             "Authorization": f"Bearer {self.nim_key}",
             "Content-Type": "application/json"
@@ -54,7 +36,43 @@ class BaseLLMClient:
             ]
         }
         async with httpx.AsyncClient() as client:
-            res = await client.post("https://integrate.api.nvidia.com/v1/chat/completions", json=payload, headers=headers)
+            res = await client.post("https://integrate.api.nvidia.com/v1/chat/completions", json=payload, headers=headers, timeout=30.0)
+            res.raise_for_status()
+            data = res.json()
+            return data["choices"][0]["message"]["content"]
+
+    async def _call_gemini(self, system_prompt: str, user_prompt: str) -> str:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={self.gemini_key}"
+        payload = {
+            "systemInstruction": {
+                "parts": [{"text": system_prompt}]
+            },
+            "contents": [
+                {"role": "user", "parts": [{"text": user_prompt}]}
+            ]
+        }
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            res = await client.post(url, json=payload)
+            res.raise_for_status()
+            data = res.json()
+            parts = data["candidates"][0]["content"]["parts"]
+            text_parts = [p["text"] for p in parts if "text" in p]
+            return "".join(text_parts)
+
+    async def _call_openai(self, system_prompt: str, user_prompt: str) -> str:
+        headers = {
+            "Authorization": f"Bearer {self.openai_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+        }
+        async with httpx.AsyncClient() as client:
+            res = await client.post("https://api.openai.com/v1/chat/completions", json=payload, headers=headers, timeout=30.0)
             res.raise_for_status()
             data = res.json()
             return data["choices"][0]["message"]["content"]

@@ -20,8 +20,8 @@ class NvidiaProvider(BaseProvider):
                 {"role": "user", "content": user_prompt}
             ]
         }
-        async with httpx.AsyncClient() as client:
-            res = await client.post(self.api_url, json=payload, headers=headers, timeout=30.0)
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            res = await client.post(self.api_url, json=payload, headers=headers)
             res.raise_for_status()
             data = res.json()
             return data["choices"][0]["message"]["content"]
