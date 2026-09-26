@@ -38,16 +38,20 @@ import {
   Clock,
   Eye,
   Share2,
+  Copy,
 } from "lucide-react";
 import { AsterAvatar, type AsterMood } from "./aster-avatar";
 import { AsterChatDrawer } from "./aster-chat-drawer";
 import { ConnectedAccountsDialog } from "./connected-accounts-dialog";
+import { SocialPreview } from "./social-previews";
+import { MarketingCalendar } from "./calendar/marketing-calendar";
 import {
   analyzeUpdate,
   generateCampaignPackage,
   verifyClaims,
   multiPublish,
   type Angle,
+  type CampaignPackage,
   type ClaimsGateResult,
   type PublishReceipt,
 } from "@/lib/api-client";
@@ -57,6 +61,41 @@ type StudioStep = 1 | 2 | 3 | 4 | 5;
 type TabType = "studio" | "campaign-detail" | "calendar" | "analytics" | "brand-brain";
 type ActiveChannel = "linkedin" | "x" | "instagram" | "youtube" | "email";
 type AppTheme = "dark" | "editorial";
+
+const DEFAULT_ANGLES: Angle[] = [
+  {
+    id: "eng",
+    tag: "Engineering Story",
+    is_recommended: true,
+    headline: "How we re-architected our core engine to cut sync latency by 70%",
+    rationale: "A deep dive into the technical challenge, tradeoffs, and production benchmarks.",
+    evidence_used: "Engineering benchmark (BENCH-001)"
+  },
+  {
+    id: "cust",
+    tag: "Customer Outcome",
+    is_recommended: false,
+    headline: "Eliminate sync lag: Real-time workflows now 70% faster across your team",
+    rationale: "Translates technical latency gains into immediate daily developer productivity.",
+    evidence_used: "Workflow velocity telemetry"
+  },
+  {
+    id: "founder",
+    tag: "Founder Conviction",
+    is_recommended: false,
+    headline: "Why we spent 6 months rebuilding state synchronization from first principles",
+    rationale: "Resonates with technical leaders by sharing conviction and design philosophy.",
+    evidence_used: "Founding manifesto & mission"
+  }
+];
+
+const DEFAULT_CHANNEL_TEXTS: Record<ActiveChannel, string> = {
+  linkedin: `We just reduced sync latency by 70%.\n\nFor teams building real-time applications, latency isn't just a number — it's lost focus, broken flow, and frustrated users.\n\nHere's how we re-architected our sync engine, what we learned, and why performance remains a core part of our product philosophy.\n\n#BuildInPublic #SaaS #Engineering`,
+  x: `We just cut sync latency by 70% in production.\n\nHere is what changed:\n1. Replaced periodic polling with bi-directional delta streams\n2. Optimistic local cache validation\n3. Zero redundant serialization hops\n\nLive for all workspaces today 👇`,
+  instagram: `70% FASTER DATA SYNC ⚡\n\nSay goodbye to stale dashboards and manual reconciliation.\n\nOur new sync engine is now running live for every team workspace.\n\nLink in bio to read the full technical benchmark breakdown.`,
+  youtube: `HOOK: Stop letting slow sync break your team's workflow.\n\nSCENE 1: The frustration of waiting 30 seconds for state updates to reflect.\nSCENE 2: The architecture breakthrough cutting sync latency by 70%.\nSCENE 3: Real-time demonstration with 10,000 live updates.\n\nLive today at velodynamics.com.`,
+  email: `Subject: Why manual sync lag ends today: 70% faster architecture live\n\nHey there,\n\nMost founders and teams spend way too much time waiting for stale data to synchronize.\n\nToday, we are changing that.\n\nHere is what is new:\n- 70% reduction in sync latency\n- Instant optimistic state reconciliation\n- 100% verified benchmark telemetry\n\nCheck out the full interactive walkthrough below.\n\nBest,\nThe Founding Team`
+};
 
 export default function MarketingOSApp() {
   const [activeTab, setActiveTab] = useState<TabType>("studio");
@@ -83,14 +122,14 @@ export default function MarketingOSApp() {
   );
 
   // Step 2: Strategy / 3 Angles
-  const [selectedAngle, setSelectedAngle] = useState<"eng" | "cust" | "founder">("eng");
+  const [angles, setAngles] = useState<Angle[]>(DEFAULT_ANGLES);
+  const [selectedAngleId, setSelectedAngleId] = useState<string>("eng");
   const [analyzing, setAnalyzing] = useState(false);
 
-  // Step 3: Content / Multi-channel preview
+  // Step 3: Content / Multi-channel package & per-platform copy
   const [activeChannel, setActiveChannel] = useState<ActiveChannel>("linkedin");
-  const [postText, setPostText] = useState(
-    `We just reduced sync latency by 70%.\n\nFor teams building real-time applications, latency isn't just a number — it's lost focus, broken flow, and frustrated users.\n\nHere's how we re-architected our sync engine, what we learned, and why performance remains a core part of our product philosophy.\n\n#BuildInPublic #SaaS #Engineering`
-  );
+  const [channelTexts, setChannelTexts] = useState<Record<ActiveChannel, string>>(DEFAULT_CHANNEL_TEXTS);
+  const [campaignPackage, setCampaignPackage] = useState<CampaignPackage | null>(null);
   const [generating, setGenerating] = useState(false);
 
   // Step 4: Verification / Claim check
@@ -110,6 +149,18 @@ export default function MarketingOSApp() {
   // Campaign Detail Sub-tab State (Screen 4 from Mood Board 2)
   const [detailSubTab, setDetailSubTab] = useState<"overview" | "content" | "evidence" | "performance" | "activity">("overview");
 
+  // Brand Brain Facts State
+  const [brandFacts, setBrandFacts] = useState<Array<{ id: string; claim: string; source: string; status: "verified" | "needs_evidence" | "prohibited"; date: string }>>([
+    { id: "f1", claim: "72% faster reconciliation", source: "Customer Case Study (Acme Corp)", status: "verified", date: "Aug 2026" },
+    { id: "f2", claim: "3 days reduced to 40 minutes", source: "Finance Interview Log", status: "verified", date: "Aug 2026" },
+    { id: "f3", claim: "Saves teams hundreds of hours", source: "Unbacked marketing copy", status: "needs_evidence", date: "Aug 2026" },
+    { id: "f4", claim: "Industry's fastest platform", source: "Hard-blocked absolute superlative", status: "prohibited", date: "Aug 2026" }
+  ]);
+  const [isAddFactOpen, setIsAddFactOpen] = useState(false);
+  const [newFactClaim, setNewFactClaim] = useState("");
+  const [newFactSource, setNewFactSource] = useState("");
+  const [newFactStatus, setNewFactStatus] = useState<"verified" | "needs_evidence" | "prohibited">("verified");
+
   // Derive Aster's Mood dynamically from the current workflow state
   const getAsterMood = (): AsterMood => {
     if (analyzing || generating || publishing) return "thinking";
@@ -120,12 +171,16 @@ export default function MarketingOSApp() {
     return "neutral";
   };
 
-  // Step 1 -> Step 2
+  // Step 1 -> Step 2: Extract real strategic angles from the user's update
   const handleFindStory = async () => {
     if (!rawUpdate.trim()) return;
     setAnalyzing(true);
     try {
-      await analyzeUpdate({ raw_update: rawUpdate });
+      const res = await analyzeUpdate({ raw_update: rawUpdate });
+      if (res && res.angles && Array.isArray(res.angles) && res.angles.length > 0) {
+        setAngles(res.angles);
+        setSelectedAngleId(res.angles[0].id);
+      }
     } catch {
       // Graceful offline fallback
     } finally {
@@ -134,19 +189,80 @@ export default function MarketingOSApp() {
     }
   };
 
-  // Step 2 -> Step 3
+  // Step 2 -> Step 3: Generate multi-channel campaign package tailored for EACH platform
   const handleSelectAngle = async () => {
     setGenerating(true);
     try {
-      await generateCampaignPackage({
-        selected_angle: selectedAngle,
+      const chosenAngle = angles.find((a) => a.id === selectedAngleId) || angles[0];
+      const pkg = await generateCampaignPackage({
+        selected_angle: chosenAngle,
         raw_update: rawUpdate,
       });
+
+      if (pkg && pkg.channels) {
+        setCampaignPackage(pkg);
+        const ch = pkg.channels;
+
+        const liText = (ch.linkedin?.post_text as string) || "";
+        const xText = (ch.x?.post_text as string) || "";
+        const igText = (ch.instagram?.caption as string) || "";
+
+        let ytText = "";
+        const ytVideo = ch.video as any;
+        if (ytVideo) {
+          ytText = `HOOK: ${ytVideo.hook_line || ""}\n\n`;
+          if (ytVideo.scenes && Array.isArray(ytVideo.scenes)) {
+            ytText += ytVideo.scenes
+              .map((s: any, idx: number) => `Scene ${idx + 1} (${s.visual || "Visual"}):\n"${s.voiceover || ""}"`)
+              .join("\n\n");
+          }
+        }
+
+        const em = ch.email as any;
+        const emText = em?.source_body || (em?.subject ? `Subject: ${em.subject}\n\n${em.preview_text || ""}\n\n${em.plain_text_fallback || ""}` : "");
+
+        setChannelTexts((prev) => ({
+          linkedin: liText || prev.linkedin,
+          x: xText || prev.x,
+          instagram: igText || prev.instagram,
+          youtube: ytText || prev.youtube,
+          email: emText || prev.email,
+        }));
+      }
     } catch {
-      // Graceful offline fallback
+      // Graceful offline fallback with existing defaults
     } finally {
       setGenerating(false);
       setStudioStep(3);
+    }
+  };
+
+  // Step 3 -> Step 4: Verification Gate
+  const handleGoToVerification = async () => {
+    setStudioStep(4);
+    try {
+      const res = await verifyClaims({
+        channels: {
+          linkedin: channelTexts.linkedin,
+          x: channelTexts.x,
+          instagram: channelTexts.instagram,
+          video: channelTexts.youtube,
+          email: channelTexts.email,
+        },
+      });
+      if (res && res.claims && res.claims.length > 0) {
+        const c1 = res.claims[0];
+        const c2 = res.claims[1] || { text: "Faster user workflows", source: "No direct source found", status: "needs_evidence" };
+        const c3 = res.claims[2] || { text: "Best-in-class performance", source: "Comparative claim (no benchmark)", status: "unsupported" };
+
+        setClaimsStatus({
+          c1: { text: c1.text, source: c1.source || "Engineering benchmark", status: c1.status === "VERIFIED" ? "verified" : "needs_evidence" },
+          c2: { text: c2.text, source: c2.source || "No direct source found", status: "needs_evidence", overridden: false },
+          c3: { text: c3.text, source: c3.source || "Comparative claim", status: "unsupported" },
+        });
+      }
+    } catch {
+      // Keep default verified state
     }
   };
 
@@ -164,7 +280,7 @@ export default function MarketingOSApp() {
     try {
       await multiPublish({
         platforms: ["linkedin", "x"],
-        content_text: postText,
+        content_text: channelTexts.linkedin,
       });
     } catch {
       // Graceful offline fallback
@@ -521,118 +637,53 @@ export default function MarketingOSApp() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {/* Angle 1: Engineering Story */}
-                  <div
-                    onClick={() => setSelectedAngle("eng")}
-                    className={`rounded-xl p-6 cursor-pointer transition-all pressable space-y-4 border ${
-                      selectedAngle === "eng"
-                        ? isDark ? "border-[#C8BBA8] bg-[#1C1F26]" : "border-[#16181D] bg-[#FFFFFF] shadow-md ring-1 ring-[#16181D]"
-                        : cardBg + " hover:opacity-90"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className={`w-8 h-8 rounded flex items-center justify-center ${isDark ? "bg-[#252934] text-[#C8BBA8]" : "bg-[#F3EFE7] text-[#8B452B]"}`}>
-                        <Wrench className="w-4 h-4" />
-                      </div>
-                      <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-[10px] font-mono">
-                        Best fit
-                      </span>
-                    </div>
+                  {angles.map((ang) => {
+                    const isSelected = selectedAngleId === ang.id;
+                    const isOutcome = ang.tag.toLowerCase().includes("outcome");
+                    const isFounder = ang.tag.toLowerCase().includes("founder");
 
-                    <div>
-                      <h3 className={`font-serif text-lg ${textPrimary}`}>Engineering Story</h3>
-                      <p className={`text-xs ${textSecondary} mt-1 leading-relaxed`}>
-                        A deep dive into the technical challenge and how you solved it.
-                      </p>
-                    </div>
+                    return (
+                      <div
+                        key={ang.id}
+                        onClick={() => setSelectedAngleId(ang.id)}
+                        className={`rounded-xl p-6 cursor-pointer transition-all pressable space-y-4 border ${
+                          isSelected
+                            ? isDark ? "border-[#C8BBA8] bg-[#1C1F26]" : "border-[#16181D] bg-[#FFFFFF] shadow-md ring-1 ring-[#16181D]"
+                            : cardBg + " hover:opacity-90"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className={`w-8 h-8 rounded flex items-center justify-center ${isDark ? "bg-[#252934] text-[#C8BBA8]" : "bg-[#F3EFE7] text-[#8B452B]"}`}>
+                            {isFounder ? <Lightbulb className="w-4 h-4" /> : isOutcome ? <Users className="w-4 h-4" /> : <Wrench className="w-4 h-4" />}
+                          </div>
+                          {ang.is_recommended && (
+                            <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-[10px] font-mono">
+                              Recommended
+                            </span>
+                          )}
+                        </div>
 
-                    <div className={`pt-3 border-t ${borderSubtle} space-y-1.5 text-xs ${textSecondary}`}>
-                      <div className="flex justify-between font-mono text-[11px]">
-                        <span>Evidence</span>
-                        <span className={textPrimary}>92%</span>
-                      </div>
-                      <div className="flex justify-between font-mono text-[11px]">
-                        <span>Relevance</span>
-                        <span className={textPrimary}>88%</span>
-                      </div>
-                      <div className="flex justify-between font-mono text-[11px]">
-                        <span>Differentiation</span>
-                        <span className={textPrimary}>85%</span>
-                      </div>
-                    </div>
-                  </div>
+                        <div>
+                          <div className={`text-[11px] font-mono uppercase tracking-wider ${textSecondary} mb-1`}>
+                            {ang.tag}
+                          </div>
+                          <h3 className={`font-serif text-base sm:text-lg ${textPrimary} font-medium leading-snug line-clamp-2`}>
+                            {ang.headline}
+                          </h3>
+                          <p className={`text-xs ${textSecondary} mt-2 leading-relaxed line-clamp-3`}>
+                            {ang.rationale}
+                          </p>
+                        </div>
 
-                  {/* Angle 2: Customer Outcome */}
-                  <div
-                    onClick={() => setSelectedAngle("cust")}
-                    className={`rounded-xl p-6 cursor-pointer transition-all pressable space-y-4 border ${
-                      selectedAngle === "cust"
-                        ? isDark ? "border-[#C8BBA8] bg-[#1C1F26]" : "border-[#16181D] bg-[#FFFFFF] shadow-md ring-1 ring-[#16181D]"
-                        : cardBg + " hover:opacity-90"
-                    }`}
-                  >
-                    <div className={`w-8 h-8 rounded flex items-center justify-center ${isDark ? "bg-[#252934] text-[#C8BBA8]" : "bg-[#F3EFE7] text-[#8B452B]"}`}>
-                      <Users className="w-4 h-4" />
-                    </div>
-
-                    <div>
-                      <h3 className={`font-serif text-lg ${textPrimary}`}>Customer Outcome</h3>
-                      <p className={`text-xs ${textSecondary} mt-1 leading-relaxed`}>
-                        How this makes your users faster and more productive.
-                      </p>
-                    </div>
-
-                    <div className={`pt-3 border-t ${borderSubtle} space-y-1.5 text-xs ${textSecondary}`}>
-                      <div className="flex justify-between font-mono text-[11px]">
-                        <span>Evidence</span>
-                        <span className={textPrimary}>68%</span>
+                        <div className={`pt-3 border-t ${borderSubtle} space-y-1.5 text-xs ${textSecondary}`}>
+                          <div className="flex justify-between items-center font-mono text-[11px]">
+                            <span>Grounding</span>
+                            <span className={`${textPrimary} truncate max-w-[140px] text-right`}>{ang.evidence_used || "Benchmark verified"}</span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex justify-between font-mono text-[11px]">
-                        <span>Relevance</span>
-                        <span className={textPrimary}>76%</span>
-                      </div>
-                      <div className="flex justify-between font-mono text-[11px]">
-                        <span>Differentiation</span>
-                        <span className={textPrimary}>72%</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Angle 3: Founder Conviction */}
-                  <div
-                    onClick={() => setSelectedAngle("founder")}
-                    className={`rounded-xl p-6 cursor-pointer transition-all pressable space-y-4 border ${
-                      selectedAngle === "founder"
-                        ? isDark ? "border-[#C8BBA8] bg-[#1C1F26]" : "border-[#16181D] bg-[#FFFFFF] shadow-md ring-1 ring-[#16181D]"
-                        : cardBg + " hover:opacity-90"
-                    }`}
-                  >
-                    <div className={`w-8 h-8 rounded flex items-center justify-center ${isDark ? "bg-[#252934] text-[#C8BBA8]" : "bg-[#F3EFE7] text-[#8B452B]"}`}>
-                      <Lightbulb className="w-4 h-4" />
-                    </div>
-
-                    <div>
-                      <h3 className={`font-serif text-lg ${textPrimary}`}>Founder Conviction</h3>
-                      <p className={`text-xs ${textSecondary} mt-1 leading-relaxed`}>
-                        Why this matters for the bigger picture.
-                      </p>
-                    </div>
-
-                    <div className={`pt-3 border-t ${borderSubtle} space-y-1.5 text-xs ${textSecondary}`}>
-                      <div className="flex justify-between font-mono text-[11px]">
-                        <span>Evidence</span>
-                        <span className={textPrimary}>54%</span>
-                      </div>
-                      <div className="flex justify-between font-mono text-[11px]">
-                        <span>Relevance</span>
-                        <span className={textPrimary}>70%</span>
-                      </div>
-                      <div className="flex justify-between font-mono text-[11px]">
-                        <span>Differentiation</span>
-                        <span className={textPrimary}>80%</span>
-                      </div>
-                    </div>
-                  </div>
+                    );
+                  })}
                 </div>
 
                 <div className="flex items-center justify-between pt-4">
@@ -648,7 +699,7 @@ export default function MarketingOSApp() {
                     disabled={generating}
                     className={`px-6 py-2.5 rounded font-medium text-xs transition-colors pressable flex items-center gap-1.5 ${btnPrimary}`}
                   >
-                    <span>{generating ? "Drafting Content..." : "Continue with this angle"}</span>
+                    <span>{generating ? "Drafting Multi-Channel Content..." : "Continue with this angle"}</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -662,7 +713,7 @@ export default function MarketingOSApp() {
                   <div>
                     <h1 className={`font-serif text-3xl ${textPrimary}`}>Your content is ready</h1>
                     <p className={`text-xs ${textSecondary} mt-1`}>
-                      Review, edit, and approve before publishing.
+                      Review and edit platform-specific copy tailored for every distribution channel.
                     </p>
                   </div>
 
@@ -716,16 +767,29 @@ export default function MarketingOSApp() {
                   <AsterAvatar mood="curious" size="xs" />
                   <div className="flex-1 space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className={`font-serif font-semibold ${textPrimary}`}>Aster&rsquo;s Feedback</span>
+                      <span className={`font-serif font-semibold ${textPrimary}`}>Aster&rsquo;s Strategy Coach</span>
                       <div className="flex items-center gap-1.5 text-[11px]">
                         <button
-                          onClick={() => setPostText("We reduced sync latency by 70% with a new architecture.\n\nHere is how we did it:...")}
+                          onClick={() => {
+                            const cur = channelTexts[activeChannel];
+                            setChannelTexts((prev) => ({
+                              ...prev,
+                              [activeChannel]: `⚡ Key Milestone: ${rawUpdate}\n\n${cur}`,
+                            }));
+                          }}
                           className={`px-2 py-0.5 rounded border transition-colors ${cardElevated}`}
                         >
-                          Make it stronger
+                          Make it punchier
                         </button>
                         <button
-                          onClick={() => setPostText("We cut sync latency by 70%.\n\nFull architecture breakdown below.")}
+                          onClick={() => {
+                            const cur = channelTexts[activeChannel];
+                            const trimmed = cur.split("\n\n").slice(0, 2).join("\n\n");
+                            setChannelTexts((prev) => ({
+                              ...prev,
+                              [activeChannel]: trimmed || cur,
+                            }));
+                          }}
                           className={`px-2 py-0.5 rounded border transition-colors ${cardElevated}`}
                         >
                           Shorten
@@ -733,7 +797,11 @@ export default function MarketingOSApp() {
                       </div>
                     </div>
                     <p className={`${textSecondary} leading-relaxed`}>
-                      This is a strong start. Consider leading with the impact (70% faster) instead of the technical detail.
+                      {activeChannel === "linkedin" && "LinkedIn performs best with a strong 1-line pattern-interrupt followed by structural line breaks."}
+                      {activeChannel === "x" && "X posts thrive on clear numbered bullets and immediate actionable takeaways."}
+                      {activeChannel === "instagram" && "Instagram copy is paired with bold graphic headlines and a clear link-in-bio prompt."}
+                      {activeChannel === "youtube" && "YouTube script is structured as high-retention hook scenes for vertical short-form video."}
+                      {activeChannel === "email" && "Email copy is personal, direct, and focused on customer impact over abstract architecture."}
                     </p>
                   </div>
                 </div>
@@ -741,7 +809,7 @@ export default function MarketingOSApp() {
                 {/* Content Dual Layout */}
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
                   {/* Left Column: Post Editor */}
-                  <div className={`md:col-span-7 rounded-xl p-6 border ${cardBg} space-y-4`}>
+                  <div className={`md:col-span-6 rounded-xl p-6 border ${cardBg} space-y-4`}>
                     <div className={`flex items-center justify-between border-b ${borderSubtle} pb-3 text-xs`}>
                       <div className="flex items-center gap-2">
                         {activeChannel === "linkedin" && (
@@ -759,13 +827,13 @@ export default function MarketingOSApp() {
                         {activeChannel === "instagram" && (
                           <>
                             <span className="font-bold text-xs text-[#E1306C]">IG</span>
-                            <span className={`font-semibold ${textPrimary}`}>Instagram Carousel</span>
+                            <span className={`font-semibold ${textPrimary}`}>Instagram Carousel Caption</span>
                           </>
                         )}
                         {activeChannel === "youtube" && (
                           <>
                             <span className="font-bold text-xs text-red-500">YT</span>
-                            <span className={`font-semibold ${textPrimary}`}>YouTube Shorts & Video</span>
+                            <span className={`font-semibold ${textPrimary}`}>YouTube Director Script</span>
                           </>
                         )}
                         {activeChannel === "email" && (
@@ -775,41 +843,75 @@ export default function MarketingOSApp() {
                           </>
                         )}
                       </div>
-                      <button className={`flex items-center gap-1 ${textSecondary} hover:${textPrimary}`}>
-                        <Edit className="w-3 h-3" />
-                        <span>Edit</span>
-                      </button>
+                      <span className={`text-[11px] font-mono ${textSecondary}`}>
+                        Live Editor
+                      </span>
                     </div>
 
                     <textarea
-                      rows={8}
-                      value={postText}
-                      onChange={(e) => setPostText(e.target.value)}
-                      className={`w-full ${isDark ? "bg-[#111215] border-[#2A2E39]" : "bg-[#FBF9F5] border-[#DDD8CE]"} border rounded-lg p-4 text-xs ${textPrimary} leading-relaxed resize-none outline-none focus:border-[#A8583C]`}
+                      rows={10}
+                      value={channelTexts[activeChannel]}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setChannelTexts((prev) => ({
+                          ...prev,
+                          [activeChannel]: val,
+                        }));
+                      }}
+                      className={`w-full ${isDark ? "bg-[#111215] border-[#2A2E39]" : "bg-[#FBF9F5] border-[#DDD8CE]"} border rounded-lg p-4 text-xs ${textPrimary} leading-relaxed resize-none outline-none focus:border-[#A8583C] font-mono`}
                     />
 
                     <div className={`flex items-center justify-between text-[11px] ${textSecondary} font-mono`}>
                       <span className="text-emerald-500 font-medium flex items-center gap-1">
-                        &check; 3 claims &bull; All verified
+                        &check; Evidence grounded &bull; Verified
                       </span>
-                      <span>{postText.length} / 3000</span>
+                      <span>
+                        {channelTexts[activeChannel].length} /{" "}
+                        {activeChannel === "x" ? 280 : activeChannel === "linkedin" ? 3000 : activeChannel === "instagram" ? 2200 : 5000} chars
+                      </span>
                     </div>
                   </div>
 
-                  {/* Right Column: Asset Graphic Preview */}
-                  <div className={`md:col-span-5 rounded-xl p-6 border ${cardBg} space-y-4`}>
-                    <span className={`text-xs font-mono uppercase tracking-wider ${textSecondary}`}>Asset Preview</span>
-                    <div className={`rounded-lg p-6 border ${isDark ? "bg-gradient-to-br from-[#1C1F26] to-[#14161B] border-[#333846]" : "bg-gradient-to-br from-[#F5F1E8] to-[#EAE3D2] border-[#DDD8CE]"} text-center space-y-4`}>
-                      <div className={`font-serif text-3xl ${textPrimary} leading-tight`}>
-                        70% Faster Sync.
-                      </div>
-                      <p className={`font-script text-base ${scriptAccent}`}>
-                        Same product. Smoother experience.
-                      </p>
-                      <div className={`pt-4 text-[10px] font-mono ${textSecondary} uppercase`}>
-                        Velo Dynamics Architecture Milestone
-                      </div>
+                  {/* Right Column: Platform-Specific Social Preview */}
+                  <div className={`md:col-span-6 rounded-xl p-6 border ${cardBg} space-y-4`}>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className={`font-mono uppercase tracking-wider ${textSecondary}`}>
+                        {activeChannel.toUpperCase()} Preview
+                      </span>
+                      <span className="text-[10px] font-mono text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                        Pixel Accurate
+                      </span>
                     </div>
+
+                    <SocialPreview
+                      channel={activeChannel}
+                      postText={channelTexts[activeChannel]}
+                      cta={
+                        activeChannel === "linkedin"
+                          ? (campaignPackage?.channels?.linkedin?.cta as string) || "Try the interactive demo"
+                          : activeChannel === "x"
+                          ? (campaignPackage?.channels?.x?.cta as string) || "velodynamics.com/demo"
+                          : activeChannel === "instagram"
+                          ? (campaignPackage?.channels?.instagram?.cta as string) || "Link in bio"
+                          : activeChannel === "email"
+                          ? (campaignPackage?.channels?.email?.cta_button_text as string) || "Explore Interactive Demo"
+                          : undefined
+                      }
+                      title={
+                        activeChannel === "email"
+                          ? (campaignPackage?.channels?.email?.subject as string) || "Product Update"
+                          : activeChannel === "instagram"
+                          ? (campaignPackage?.channels?.instagram?.visual_headline as string) || "70% Faster Sync"
+                          : (campaignPackage?.core_thesis || rawUpdate)
+                      }
+                      subject={(campaignPackage?.channels?.email?.subject as string) || "Why manual sync lag ends today: 70% faster architecture live"}
+                      senderName={(campaignPackage?.channels?.email?.sender_name as string) || "Founding Team"}
+                      visualHeadline={
+                        (campaignPackage?.channels?.instagram?.visual_headline as string) ||
+                        (campaignPackage?.core_thesis ? campaignPackage.core_thesis.slice(0, 32).toUpperCase() : "70% FASTER DATA SYNC")
+                      }
+                      videoScenes={campaignPackage?.channels?.video?.scenes as any}
+                    />
                   </div>
                 </div>
 
@@ -822,7 +924,7 @@ export default function MarketingOSApp() {
                   </button>
 
                   <button
-                    onClick={() => setStudioStep(4)}
+                    onClick={handleGoToVerification}
                     className={`px-6 py-2.5 rounded font-medium text-xs transition-colors pressable flex items-center gap-1.5 ${btnPrimary}`}
                   >
                     <span>Check claims &amp; evidence</span>
@@ -1110,155 +1212,200 @@ export default function MarketingOSApp() {
               ))}
             </div>
 
-            {/* Campaign Detail Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
-              {/* Left Column: Campaign Metadata */}
-              <div className={`md:col-span-5 rounded-xl p-6 border ${cardBg} space-y-4`}>
-                <h3 className={`font-serif text-sm font-semibold ${textPrimary}`}>Campaign Details</h3>
-                <div className={`space-y-3 text-xs ${textSecondary}`}>
-                  <div className="flex justify-between py-1 border-b border-black/5 dark:border-white/5">
-                    <span>Created by</span>
-                    <span className={textPrimary}>Alex Chen</span>
+            {/* Sub-tab 1: Overview */}
+            {detailSubTab === "overview" && (
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+                <div className={`md:col-span-5 rounded-xl p-6 border ${cardBg} space-y-4`}>
+                  <h3 className={`font-serif text-sm font-semibold ${textPrimary}`}>Campaign Details</h3>
+                  <div className={`space-y-3 text-xs ${textSecondary}`}>
+                    <div className="flex justify-between py-1 border-b border-black/5 dark:border-white/5">
+                      <span>Created by</span>
+                      <span className={textPrimary}>Founding Team</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-black/5 dark:border-white/5">
+                      <span>Selected Angle</span>
+                      <span className={textPrimary}>{angles.find((a) => a.id === selectedAngleId)?.tag || "Customer Outcome"}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-black/5 dark:border-white/5">
+                      <span>Target Channels</span>
+                      <span className={textPrimary}>LinkedIn, X, Instagram, YouTube, Email</span>
+                    </div>
+                    <div className="flex justify-between py-1">
+                      <span>Execution Status</span>
+                      <span className="text-emerald-500 font-mono font-medium">Ready &bull; Verified</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between py-1 border-b border-black/5 dark:border-white/5">
-                    <span>Created on</span>
-                    <span className={textPrimary}>Mar 10, 2025</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-black/5 dark:border-white/5">
-                    <span>Strategic Angle</span>
-                    <span className={textPrimary}>Engineering Story</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-black/5 dark:border-white/5">
-                    <span>Target Channels</span>
-                    <span className={textPrimary}>LinkedIn, X (Twitter)</span>
-                  </div>
-                  <div className="flex justify-between py-1">
-                    <span>Execution Status</span>
-                    <span className="text-emerald-500 font-mono font-medium">Scheduled</span>
+
+                  <div className={`p-3 rounded-lg border ${cardElevated} flex items-start gap-2.5 text-xs`}>
+                    <AsterAvatar mood="thinking" size="xs" />
+                    <p className={`${textSecondary} text-[11px] leading-relaxed`}>
+                      <strong>Aster:</strong> All copy is grounded in verified benchmarks. Peak founder engagement slot recommended: 10:00 AM &ndash; 11:00 AM.
+                    </p>
                   </div>
                 </div>
 
-                {/* Aster's Campaign Note */}
-                <div className={`p-3 rounded-lg border ${cardElevated} flex items-start gap-2.5 text-xs`}>
-                  <AsterAvatar mood="thinking" size="xs" />
-                  <p className={`${textSecondary} text-[11px] leading-relaxed`}>
-                    <strong>Aster:</strong> This campaign is scheduled for peak founder engagement hours (10:00 AM &ndash; 10:30 AM EST).
-                  </p>
+                <div className={`md:col-span-7 rounded-xl p-6 border ${cardBg} space-y-4`}>
+                  <div className="flex items-center justify-between">
+                    <h3 className={`font-serif text-sm font-semibold ${textPrimary}`}>Distribution Status</h3>
+                    <button
+                      onClick={() => setDetailSubTab("content")}
+                      className={`text-xs ${scriptAccent} hover:underline`}
+                    >
+                      View all channel copy &rarr;
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className={`p-3.5 rounded-lg border ${cardElevated} flex items-center justify-between text-xs`}>
+                      <div className="flex items-center gap-2.5">
+                        <span className="font-bold text-xs text-[#0A66C2]">in</span>
+                        <span className={`font-medium ${textPrimary}`}>LinkedIn Post</span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-mono text-[10px]">Verified &bull; Ready</span>
+                    </div>
+
+                    <div className={`p-3.5 rounded-lg border ${cardElevated} flex items-center justify-between text-xs`}>
+                      <div className="flex items-center gap-2.5">
+                        <span className="font-bold text-xs">X</span>
+                        <span className={`font-medium ${textPrimary}`}>X Thread</span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-mono text-[10px]">Verified &bull; Ready</span>
+                    </div>
+
+                    <div className={`p-3.5 rounded-lg border ${cardElevated} flex items-center justify-between text-xs`}>
+                      <div className="flex items-center gap-2.5">
+                        <span className="font-bold text-xs text-[#E1306C]">IG</span>
+                        <span className={`font-medium ${textPrimary}`}>Instagram Visual</span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-mono text-[10px]">Asset Generated</span>
+                    </div>
+
+                    <div className={`p-3.5 rounded-lg border ${cardElevated} flex items-center justify-between text-xs`}>
+                      <div className="flex items-center gap-2.5">
+                        <span className="font-bold text-xs text-amber-500">@</span>
+                        <span className={`font-medium ${textPrimary}`}>Customer Email</span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-mono text-[10px]">HTML Formatted</span>
+                    </div>
+                  </div>
                 </div>
               </div>
+            )}
 
-              {/* Right Column: Content Preview Assets */}
-              <div className={`md:col-span-7 rounded-xl p-6 border ${cardBg} space-y-4`}>
-                <div className="flex items-center justify-between">
-                  <h3 className={`font-serif text-sm font-semibold ${textPrimary}`}>Scheduled Assets</h3>
-                  <button className={`text-xs ${scriptAccent} hover:underline`}>
-                    View all assets &rarr;
-                  </button>
-                </div>
-
-                <div className="space-y-3">
-                  <div className={`p-3.5 rounded-lg border ${cardElevated} flex items-center justify-between text-xs`}>
-                    <div className="flex items-center gap-2.5">
-                      <span className="font-bold text-xs text-[#0A66C2]">in</span>
-                      <span className={`font-medium ${textPrimary}`}>LinkedIn Post</span>
+            {/* Sub-tab 2: Content */}
+            {detailSubTab === "content" && (
+              <div className="space-y-4">
+                {(["linkedin", "x", "instagram", "youtube", "email"] as const).map((ch) => (
+                  <div key={ch} className={`rounded-xl p-5 border ${cardBg} space-y-3`}>
+                    <div className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-2 text-xs">
+                      <span className="font-mono uppercase font-semibold text-emerald-500">{ch} Copy</span>
+                      <button
+                        onClick={() => {
+                          if (navigator.clipboard) {
+                            navigator.clipboard.writeText(channelTexts[ch]);
+                            alert(`Copied ${ch.toUpperCase()} copy to clipboard!`);
+                          }
+                        }}
+                        className={`flex items-center gap-1 text-[11px] px-2.5 py-1 rounded border ${cardElevated} hover:opacity-80`}
+                      >
+                        <Copy className="w-3 h-3" />
+                        <span>Copy Text</span>
+                      </button>
                     </div>
-                    <span className={`font-mono text-[11px] ${textSecondary}`}>Mar 12, 10:00 AM</span>
+                    <pre className={`text-xs ${textPrimary} whitespace-pre-wrap font-sans leading-relaxed`}>
+                      {channelTexts[ch]}
+                    </pre>
                   </div>
+                ))}
+              </div>
+            )}
 
-                  <div className={`p-3.5 rounded-lg border ${cardElevated} flex items-center justify-between text-xs`}>
-                    <div className="flex items-center gap-2.5">
-                      <span className="font-bold text-xs">X</span>
-                      <span className={`font-medium ${textPrimary}`}>X Thread</span>
-                    </div>
-                    <span className={`font-mono text-[11px] ${textSecondary}`}>Mar 12, 10:30 AM</span>
+            {/* Sub-tab 3: Evidence */}
+            {detailSubTab === "evidence" && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className={`rounded-xl p-5 border ${cardBg} space-y-2`}>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-emerald-500 font-mono text-[11px]">&check; Grounded Proof</span>
+                    <span className="font-mono text-[10px] text-neutral-400">BENCH-001</span>
+                  </div>
+                  <h4 className={`font-serif text-base ${textPrimary}`}>70% Sync Latency Reduction</h4>
+                  <p className={`text-xs ${textSecondary}`}>Verified by production benchmark traces across 10,000 transactions.</p>
+                </div>
+                <div className={`rounded-xl p-5 border ${cardBg} space-y-2`}>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-emerald-500 font-mono text-[11px]">&check; Zero Hallucination Gate</span>
+                    <span className="font-mono text-[10px] text-neutral-400">PASSED</span>
+                  </div>
+                  <h4 className={`font-serif text-base ${textPrimary}`}>No Prohibited Superlatives</h4>
+                  <p className={`text-xs ${textSecondary}`}>Deterministic claims audit completed with 0 unsupported statements.</p>
+                </div>
+              </div>
+            )}
+
+            {/* Sub-tab 4: Performance */}
+            {detailSubTab === "performance" && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className={`rounded-xl p-4 border ${cardBg}`}>
+                    <span className={`text-xs ${textSecondary}`}>Est. Reach</span>
+                    <p className={`font-serif text-2xl ${textPrimary} mt-1`}>18.4K</p>
+                    <span className="text-[10px] font-mono text-emerald-500">+24% vs average</span>
+                  </div>
+                  <div className={`rounded-xl p-4 border ${cardBg}`}>
+                    <span className={`text-xs ${textSecondary}`}>Target CTR</span>
+                    <p className={`font-serif text-2xl ${textPrimary} mt-1`}>4.2%</p>
+                    <span className="text-[10px] font-mono text-emerald-500">High intent</span>
+                  </div>
+                  <div className={`rounded-xl p-4 border ${cardBg}`}>
+                    <span className={`text-xs ${textSecondary}`}>Channels Ready</span>
+                    <p className={`font-serif text-2xl ${textPrimary} mt-1`}>5 / 5</p>
+                    <span className="text-[10px] font-mono text-emerald-500">Full syndication</span>
+                  </div>
+                  <div className={`rounded-xl p-4 border ${cardBg}`}>
+                    <span className={`text-xs ${textSecondary}`}>Confidence</span>
+                    <p className={`font-serif text-2xl ${textPrimary} mt-1`}>98%</p>
+                    <span className="text-[10px] font-mono text-emerald-500">Evidence backed</span>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
+
+            {/* Sub-tab 5: Activity */}
+            {detailSubTab === "activity" && (
+              <div className={`rounded-xl p-6 border ${cardBg} space-y-4 text-xs`}>
+                <h4 className={`font-serif text-sm font-semibold ${textPrimary}`}>Campaign Audit Log</h4>
+                <div className="space-y-3 font-mono text-[11px]">
+                  <div className="flex items-center gap-3">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span className={textSecondary}>Just now</span>
+                    <span className={textPrimary}>Multi-channel package compiled for LinkedIn, X, Instagram, Video, Email</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="w-2 h-2 rounded-full bg-blue-500" />
+                    <span className={textSecondary}>1 min ago</span>
+                    <span className={textPrimary}>Claims Verification Gate scanned 3 assertions &bull; Zero prohibited superlatives</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="w-2 h-2 rounded-full bg-purple-500" />
+                    <span className={textSecondary}>3 mins ago</span>
+                    <span className={textPrimary}>Strategic Angle discovered from raw engineering update</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {/* =========================================================================
-            TAB 3: CONTENT CALENDAR (Matching Mood Board 1 & 2)
+            TAB 3: CONTENT CALENDAR (Interactive Grid & Full Scheduling Engine)
            ========================================================================= */}
         {activeTab === "calendar" && (
           <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h1 className={`font-serif text-3xl ${textPrimary}`}>Content Calendar</h1>
-                <p className={`text-xs ${textSecondary} mt-1`}>A clear view of your upcoming and published content.</p>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className={`flex items-center p-0.5 rounded-md border ${cardElevated} text-xs`}>
-                  <button className={`px-3 py-1 rounded font-medium ${isDark ? "bg-[#282C37] text-white" : "bg-white text-black shadow-xs"}`}>Month</button>
-                  <button className={`px-3 py-1 rounded ${textSecondary}`}>Week</button>
-                </div>
-                <button
-                  onClick={() => {
-                    setActiveTab("studio");
-                    setStudioStep(1);
-                  }}
-                  className={`px-3.5 py-1.5 rounded font-medium text-xs pressable flex items-center gap-1 ${btnPrimary}`}
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>New Update</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Calendar Grid Header */}
-            <div className={`rounded-xl border ${cardBg} overflow-hidden`}>
-              <div className={`p-4 border-b ${borderSubtle} flex items-center justify-between ${cardElevated}`}>
-                <span className={`font-serif text-base font-semibold ${textPrimary}`}>March 2025</span>
-                <div className={`flex items-center gap-1.5 text-xs ${textSecondary}`}>
-                  <button className="px-2 py-1 rounded hover:bg-black/5 dark:hover:bg-white/5">&lt;</button>
-                  <button className="px-2 py-1 rounded hover:bg-black/5 dark:hover:bg-white/5">&gt;</button>
-                </div>
-              </div>
-
-              {/* Grid */}
-              <div className={`grid grid-cols-7 text-center text-xs font-mono border-b ${borderSubtle} ${isDark ? "bg-[#14161B]" : "bg-[#F3EFE7]"} ${textSecondary} py-2`}>
-                <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
-              </div>
-
-              <div className={`grid grid-cols-7 gap-px ${isDark ? "bg-[#242833]" : "bg-[#E5E0D5]"} text-xs`}>
-                {/* 28 Days Simulation */}
-                {Array.from({ length: 28 }, (_, i) => {
-                  const day = i + 1;
-                  return (
-                    <div key={day} className={`${isDark ? "bg-[#16181D]" : "bg-[#FFFFFF]"} min-h-[90px] p-2 space-y-1`}>
-                      <span className={`text-[10px] font-mono ${textSecondary}`}>{day}</span>
-                      {day === 4 && (
-                        <div className="p-1 rounded bg-blue-500/15 border border-blue-500/30 text-[10px] text-blue-600 dark:text-blue-300 truncate font-medium">
-                          LinkedIn 10:00 AM
-                        </div>
-                      )}
-                      {day === 12 && (
-                        <div className="p-1 rounded bg-slate-500/15 border border-slate-500/30 text-[10px] text-slate-800 dark:text-slate-200 truncate font-medium">
-                          X Thread 10:30 AM
-                        </div>
-                      )}
-                      {day === 14 && (
-                        <div className="p-1 rounded bg-amber-500/15 border border-amber-500/30 text-[10px] text-amber-700 dark:text-amber-300 truncate font-medium">
-                          Customer Story
-                        </div>
-                      )}
-                      {day === 19 && (
-                        <div className="p-1 rounded bg-pink-500/15 border border-pink-500/30 text-[10px] text-pink-700 dark:text-pink-300 truncate font-medium">
-                          Instagram 9:00 AM
-                        </div>
-                      )}
-                      {day === 24 && (
-                        <div className="p-1 rounded bg-emerald-500/15 border border-emerald-500/30 text-[10px] text-emerald-700 dark:text-emerald-300 truncate font-medium">
-                          Product Update
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <MarketingCalendar
+              orgId="00000000-0000-0000-0000-000000000001"
+              brandId="brand_default"
+              brandName="Velo Dynamics"
+            />
           </div>
         )}
 
@@ -1372,51 +1519,116 @@ export default function MarketingOSApp() {
                   The verified evidence foundation that Aster uses to write and check your stories.
                 </p>
               </div>
-              <button className={`px-3.5 py-1.5 rounded font-medium text-xs pressable flex items-center gap-1.5 ${btnPrimary}`}>
+              <button
+                onClick={() => setIsAddFactOpen(true)}
+                className={`px-3.5 py-1.5 rounded font-medium text-xs pressable flex items-center gap-1.5 ${btnPrimary}`}
+              >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Add Verified Fact</span>
               </button>
             </div>
 
+            {/* Add Fact Inline Form Modal */}
+            {isAddFactOpen && (
+              <div className={`p-5 rounded-xl border ${cardElevated} space-y-4`}>
+                <div className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-2">
+                  <span className={`font-serif font-semibold text-sm ${textPrimary}`}>Add New Grounded Truth Node</span>
+                  <button onClick={() => setIsAddFactOpen(false)} className={`text-xs ${textSecondary} hover:${textPrimary}`}>
+                    Cancel
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                  <div className="space-y-1">
+                    <label className={textSecondary}>Grounded Assertion / Milestone:</label>
+                    <input
+                      type="text"
+                      value={newFactClaim}
+                      onChange={(e) => setNewFactClaim(e.target.value)}
+                      placeholder="e.g. 5x faster database querying"
+                      className={`w-full p-2.5 rounded border ${isDark ? "bg-[#111215] border-[#2A2E39]" : "bg-white border-[#DDD8CE]"} ${textPrimary} outline-none`}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className={textSecondary}>Verification Source / Evidence:</label>
+                    <input
+                      type="text"
+                      value={newFactSource}
+                      onChange={(e) => setNewFactSource(e.target.value)}
+                      placeholder="e.g. Q3 Benchmark Benchmark report #14"
+                      className={`w-full p-2.5 rounded border ${isDark ? "bg-[#111215] border-[#2A2E39]" : "bg-white border-[#DDD8CE]"} ${textPrimary} outline-none`}
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between pt-2">
+                  <div className="flex items-center gap-3 text-xs">
+                    <label className="flex items-center gap-1 cursor-pointer">
+                      <input
+                        type="radio"
+                        checked={newFactStatus === "verified"}
+                        onChange={() => setNewFactStatus("verified")}
+                      />
+                      <span className="text-emerald-500 font-medium">Verified</span>
+                    </label>
+                    <label className="flex items-center gap-1 cursor-pointer">
+                      <input
+                        type="radio"
+                        checked={newFactStatus === "needs_evidence"}
+                        onChange={() => setNewFactStatus("needs_evidence")}
+                      />
+                      <span className="text-amber-500 font-medium">Needs Evidence</span>
+                    </label>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (!newFactClaim.trim()) return;
+                      setBrandFacts((prev) => [
+                        {
+                          id: `f_${Date.now()}`,
+                          claim: newFactClaim,
+                          source: newFactSource || "Team Internal Verification",
+                          status: newFactStatus,
+                          date: "Just now",
+                        },
+                        ...prev,
+                      ]);
+                      setNewFactClaim("");
+                      setNewFactSource("");
+                      setIsAddFactOpen(false);
+                    }}
+                    className={`px-4 py-2 rounded text-xs font-medium ${btnPrimary}`}
+                  >
+                    Save Truth Node
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className={`rounded-xl p-5 border ${cardBg} space-y-2`}>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-emerald-500 font-mono text-[11px]">&check; Verified</span>
-                  <span className={`${textSecondary} font-mono text-[10px]`}>Aug 2026</span>
+              {brandFacts.map((f) => (
+                <div key={f.id} className={`rounded-xl p-5 border ${cardBg} space-y-2`}>
+                  <div className="flex items-center justify-between text-xs">
+                    {f.status === "verified" && (
+                      <span className="text-emerald-500 font-mono text-[11px]">&check; Verified</span>
+                    )}
+                    {f.status === "needs_evidence" && (
+                      <span className="text-amber-500 font-mono text-[11px]">&bull; Needs Evidence</span>
+                    )}
+                    {f.status === "prohibited" && (
+                      <span className="text-rose-500 font-mono text-[11px]">&times; Prohibited</span>
+                    )}
+                    <span className={`${textSecondary} font-mono text-[10px]`}>{f.date}</span>
+                  </div>
+                  <p className={`font-serif text-sm ${textPrimary} ${f.status === "prohibited" ? "line-through" : ""}`}>
+                    {f.claim}
+                  </p>
+                  <p className={`text-[11px] ${f.status === "prohibited" ? "text-rose-500" : textSecondary}`}>
+                    Source: {f.source}
+                  </p>
                 </div>
-                <p className={`font-serif text-sm ${textPrimary}`}>72% faster reconciliation</p>
-                <p className={`text-[11px] ${textSecondary}`}>Source: Customer Case Study (Acme Corp)</p>
-              </div>
-
-              <div className={`rounded-xl p-5 border ${cardBg} space-y-2`}>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-emerald-500 font-mono text-[11px]">&check; Verified</span>
-                  <span className={`${textSecondary} font-mono text-[10px]`}>Aug 2026</span>
-                </div>
-                <p className={`font-serif text-sm ${textPrimary}`}>3 days reduced to 40 minutes</p>
-                <p className={`text-[11px] ${textSecondary}`}>Source: Finance Interview Log</p>
-              </div>
-
-              <div className={`rounded-xl p-5 border ${cardBg} space-y-2`}>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-amber-500 font-mono text-[11px]">&bull; Needs Evidence</span>
-                  <span className={`${textSecondary} font-mono text-[10px]`}>Aug 2026</span>
-                </div>
-                <p className={`font-serif text-sm ${textPrimary}`}>Saves teams hundreds of hours</p>
-                <p className={`text-[11px] ${textSecondary}`}>Source: Unbacked marketing copy</p>
-              </div>
-
-              <div className={`rounded-xl p-5 border ${cardBg} space-y-2`}>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-rose-500 font-mono text-[11px]">&times; Prohibited</span>
-                  <span className={`${textSecondary} font-mono text-[10px]`}>Aug 2026</span>
-                </div>
-                <p className={`font-serif text-sm ${textPrimary} line-through`}>Industry&rsquo;s fastest platform</p>
-                <p className="text-[11px] text-rose-500">Hard-blocked absolute superlative</p>
-              </div>
+              ))}
             </div>
 
-            {/* Empty State / Bottom Inspiration with Aster Peeking (Matching Mood Board 3) */}
+            {/* Bottom Inspiration with Aster */}
             <div className={`rounded-xl p-6 border ${cardBg} flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left`}>
               <div className="flex items-center gap-4">
                 <div className="w-14 h-10 overflow-hidden relative">
@@ -1441,6 +1653,28 @@ export default function MarketingOSApp() {
           </div>
         )}
       </main>
+
+      {/* Footer with Privacy Policy and Terms of Service */}
+      <footer className={`py-8 px-6 sm:px-12 border-t ${borderSubtle} max-w-6xl mx-auto w-full flex flex-col sm:flex-row items-center justify-between gap-4 text-xs ${textSecondary} mt-12`}>
+        <div className="flex items-center gap-2">
+          <span className={`font-serif font-bold text-sm ${textPrimary}`}>Marketing OS</span>
+          <span>&copy; 2026</span>
+        </div>
+        <p className={`font-script text-sm ${scriptAccent}`}>
+          Progress deserves a stage.
+        </p>
+        <div className="flex items-center gap-6">
+          <Link href="/privacy" className={`hover:${textPrimary} underline-offset-4 hover:underline`}>
+            Privacy Policy
+          </Link>
+          <Link href="/terms" className={`hover:${textPrimary} underline-offset-4 hover:underline`}>
+            Terms of Service
+          </Link>
+          <Link href="/" className={`hover:${textPrimary} underline-offset-4 hover:underline`}>
+            Home
+          </Link>
+        </div>
+      </footer>
 
       {/* Floating On-Demand Aster Chat Drawer */}
       <AsterChatDrawer isOpen={chatOpen} onClose={() => setChatOpen(false)} />

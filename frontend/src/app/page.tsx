@@ -382,6 +382,8 @@ export default function LandingPage() {
           Progress deserves a stage.
         </p>
         <div className="flex items-center gap-6">
+          <Link href="/privacy" className="hover:text-[#FBF9F5]">Privacy Policy</Link>
+          <Link href="/terms" className="hover:text-[#FBF9F5]">Terms & Conditions</Link>
           <Link href="/login" className="hover:text-[#FBF9F5]">Sign In</Link>
           <Link href="/dashboard" className="hover:text-[#FBF9F5]">Launch Studio</Link>
         </div>
