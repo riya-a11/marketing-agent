@@ -333,7 +333,7 @@ def init_db():
         cursor.execute("ALTER TABLE social_accounts ADD COLUMN refresh_lease_expires_at TIMESTAMP;")
     except Exception:
         pass
-
+    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_social_accounts_platform ON social_accounts(platform);")
     # Seed Default Organizations for Multi-Tenant Demo
     cursor.execute("""
     INSERT INTO organizations (id, name, slug)

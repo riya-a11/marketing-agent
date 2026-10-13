@@ -64,19 +64,235 @@ class SocialOAuthService:
     @classmethod
     def map_provider_http_exception(cls, e: Exception, platform: str) -> ProviderError:
         """Translates transport and HTTP errors into typed ProviderError taxonomy."""
+        if isinstance(e, ProviderError):
+            return e
         if isinstance(e, httpx.HTTPStatusError):
             code = e.response.status_code
+            try:
+                err_data = e.response.json().get("error", {})
+                err_msg = err_data.get("message", f"{platform.capitalize()} API error (HTTP {code}).")
+            except Exception:
+                err_msg = f"{platform.capitalize()} API error (HTTP {code})."
             if code == 401:
-                return ProviderAuthenticationError(f"{platform.capitalize()} credentials or exchange code invalid (HTTP 401).")
+                return ProviderAuthenticationError(f"{platform.capitalize()} credentials or code invalid: {err_msg}")
             elif code == 403:
-                return ProviderAuthorizationDenied(f"{platform.capitalize()} authorization denied or scope refused (HTTP 403).")
+                return ProviderAuthorizationDenied(f"{platform.capitalize()} authorization denied: {err_msg}")
             elif code == 429:
-                return ProviderRateLimitedError(f"{platform.capitalize()} API rate limit exceeded during handshake (HTTP 429).")
+                return ProviderRateLimitedError(f"{platform.capitalize()} API rate limit exceeded.")
             elif code >= 500:
-                return ProviderUnavailableError(f"{platform.capitalize()} upstream service unavailable (HTTP {code}).")
+                return ProviderUnavailableError(f"{platform.capitalize()} service unavailable (HTTP {code}).")
+            return ProviderAuthenticationError(f"{platform.capitalize()} OAuth exchange failed (HTTP {code}): {err_msg}")
         elif isinstance(e, (httpx.TimeoutException, httpx.ConnectError)):
             return ProviderUnavailableError(f"{platform.capitalize()} upstream service timed out or connection failed.")
         return ProviderConfigurationError(f"Live {platform.capitalize()} OAuth exchange failed: {str(e)}")
+
+    @classmethod
+    async def _exchange_instagram(cls, code: str, redirect_uri: str) -> Dict[str, Any]:
+        app_id = settings.INSTAGRAM_APP_ID.strip()
+        app_secret = settings.INSTAGRAM_APP_SECRET.strip()
+
+        if app_id and app_secret and "mock" not in app_id and "your_" not in app_id:
+            try:
+                async with httpx.AsyncClient(timeout=15.0) as client:
+                    # 1. Exchange authorization code for short-lived User Access Token via POST body (protects client_secret from URL logging)
+                    token_res = await client.post(
+                        "https://graph.facebook.com/v19.0/oauth/access_token",
+                        data={
+                            "client_id": app_id,
+                            "client_secret": app_secret,
+                            "redirect_uri": redirect_uri,
+                            "code": code
+                        }
+                    )
+                    if token_res.status_code != 200:
+                        try:
+                            err_data = token_res.json().get("error", {})
+                            err_msg = err_data.get("message", "Meta OAuth token exchange failed.")
+                            err_code = err_data.get("code", "AUTH_ERROR")
+                        except Exception:
+                            err_msg = "Meta OAuth token exchange failed."
+                            err_code = token_res.status_code
+                        logger.error(f"Meta OAuth token exchange failed (code {err_code}): {err_msg}")
+                        raise ProviderAuthenticationError(f"Meta OAuth token exchange failed [{err_code}]: {err_msg}")
+
+                    token_data = token_res.json()
+                    short_lived_token = token_data.get("access_token")
+                    if not short_lived_token:
+                        raise ProviderAuthenticationError("Meta OAuth response missing 'access_token'.")
+
+                    # 2. Exchange short-lived User Access Token for 60-day Long-Lived User Access Token
+                    long_res = await client.get(
+                        "https://graph.facebook.com/v19.0/oauth/access_token",
+                        params={
+                            "grant_type": "fb_exchange_token",
+                            "client_id": app_id,
+                            "client_secret": app_secret,
+                            "fb_exchange_token": short_lived_token
+                        }
+                    )
+                    if long_res.status_code == 200:
+                        long_data = long_res.json()
+                        access_token = long_data.get("access_token", short_lived_token)
+                        expires_in = long_data.get("expires_in", 5184000)
+                    else:
+                        logger.warning(f"Long-lived token exchange warning ({long_res.status_code})")
+                        access_token = short_lived_token
+                        expires_in = token_data.get("expires_in", 5184000)
+
+                    # 3. Inspect granted token permissions safely for diagnostics
+                    granted_perms = []
+                    try:
+                        perm_res = await client.get(
+                            "https://graph.facebook.com/v19.0/me/permissions",
+                            params={"access_token": access_token}
+                        )
+                        if perm_res.status_code == 200:
+                            p_data = perm_res.json().get("data", [])
+                            granted_perms = [p.get("permission") for p in p_data if p.get("status") == "granted"]
+                            logger.info(f"Meta User Token granted permissions ({len(granted_perms)}): {', '.join(granted_perms)}")
+                        else:
+                            logger.warning(f"Meta /me/permissions returned HTTP {perm_res.status_code}")
+                    except Exception as ex:
+                        logger.warning(f"Could not inspect token permissions: {ex}")
+
+                    # 4. Multi-Endpoint Page & Instagram Asset Discovery
+                    discovered_pages: Dict[str, Dict[str, Any]] = {}
+
+                    # Endpoint A: Direct /me/accounts
+                    accounts_res = await client.get(
+                        "https://graph.facebook.com/v19.0/me/accounts",
+                        params={
+                            "fields": "id,name,access_token,instagram_business_account{id,username,name,profile_picture_url}",
+                            "access_token": access_token
+                        }
+                    )
+                    if accounts_res.status_code == 200:
+                        for page in accounts_res.json().get("data", []):
+                            if page.get("id"):
+                                discovered_pages[str(page["id"])] = page
+                    else:
+                        try:
+                            err_data = accounts_res.json().get("error", {})
+                            logger.error(f"Meta /me/accounts failed (HTTP {accounts_res.status_code}, code {err_data.get('code')}): {err_data.get('message')}")
+                        except Exception:
+                            logger.error(f"Meta /me/accounts failed (HTTP {accounts_res.status_code})")
+
+                    # Endpoint B: Fallback /me?fields=accounts
+                    if not discovered_pages:
+                        try:
+                            me_res = await client.get(
+                                "https://graph.facebook.com/v19.0/me",
+                                params={
+                                    "fields": "id,name,accounts{id,name,access_token,instagram_business_account{id,username,name,profile_picture_url}}",
+                                    "access_token": access_token
+                                }
+                            )
+                            if me_res.status_code == 200:
+                                me_accounts = me_res.json().get("accounts", {}).get("data", [])
+                                for page in me_accounts:
+                                    if page.get("id") and str(page["id"]) not in discovered_pages:
+                                        discovered_pages[str(page["id"])] = page
+                        except Exception as ex:
+                            logger.warning(f"Fallback /me?fields=accounts query warning: {ex}")
+
+                    # Endpoint C: Fallback /me/businesses (Meta Business Manager pages)
+                    try:
+                        biz_res = await client.get(
+                            "https://graph.facebook.com/v19.0/me/businesses",
+                            params={
+                                "fields": "id,name,owned_pages{id,name,access_token,instagram_business_account{id,username,name,profile_picture_url}},client_pages{id,name,access_token,instagram_business_account{id,username,name,profile_picture_url}}",
+                                "access_token": access_token
+                            }
+                        )
+                        if biz_res.status_code == 200:
+                            for biz in biz_res.json().get("data", []):
+                                biz_pages = biz.get("owned_pages", {}).get("data", []) + biz.get("client_pages", {}).get("data", [])
+                                for page in biz_pages:
+                                    if page.get("id") and str(page["id"]) not in discovered_pages:
+                                        discovered_pages[str(page["id"])] = page
+                    except Exception as ex:
+                        logger.warning(f"Fallback Meta Business Manager query warning: {ex}")
+
+                    logger.info(f"Discovered {len(discovered_pages)} total Facebook Page(s) across Graph API discovery endpoints.")
+
+                    selected_page_id = None
+                    selected_page_name = None
+                    ig_business_account = None
+                    page_diagnostics = []
+
+                    for page_id, page in discovered_pages.items():
+                        p_name = page.get("name")
+                        p_ig = page.get("instagram_business_account")
+                        has_ig = bool(p_ig and p_ig.get("id"))
+                        diag_entry = f"Page[ID={page_id}, Name='{p_name}', HasLinkedIG={has_ig}]"
+                        page_diagnostics.append(diag_entry)
+
+                        # Explicit Page-level lookup fallback if nested IG object was missing
+                        if not has_ig and page_id:
+                            p_token = page.get("access_token") or access_token
+                            try:
+                                page_ig_res = await client.get(
+                                    f"https://graph.facebook.com/v19.0/{page_id}",
+                                    params={
+                                        "fields": "instagram_business_account{id,username,name,profile_picture_url}",
+                                        "access_token": p_token
+                                    }
+                                )
+                                if page_ig_res.status_code == 200:
+                                    p_ig_data = page_ig_res.json().get("instagram_business_account")
+                                    if p_ig_data and p_ig_data.get("id"):
+                                        p_ig = p_ig_data
+                                        has_ig = True
+                                        page_diagnostics[-1] = f"Page[ID={page_id}, Name='{p_name}', HasLinkedIG=True (via Page Lookup)]"
+                                        logger.info(f"Discovered linked Instagram Business Account on Page {page_id} via explicit Page lookup.")
+                            except Exception as ex:
+                                logger.warning(f"Explicit Page IG lookup warning for Page {page_id}: {ex}")
+
+                        if has_ig and not ig_business_account:
+                            ig_business_account = p_ig
+                            selected_page_id = page_id
+                            selected_page_name = p_name
+
+                    # Safe diagnostic log for server logs (never logs tokens, secrets, codes, or URLs)
+                    logger.info(f"Meta Pages breakdown ({len(discovered_pages)} pages): {', '.join(page_diagnostics) if page_diagnostics else 'None'}")
+
+                    if not ig_business_account or not ig_business_account.get("id"):
+                        logger.error(f"No linked Instagram Business account found across {len(discovered_pages)} Facebook Page(s). Breakdown: {page_diagnostics}")
+                        raise ProviderPermissionError(
+                            f"No Instagram Business account linked to a Facebook Page was found "
+                            f"(evaluated {len(discovered_pages)} Facebook Page(s): {', '.join(page_diagnostics) if page_diagnostics else '0 pages returned'}; Granted permissions: {', '.join(granted_perms) if granted_perms else 'None'}). "
+                            "Please ensure your Instagram account is a Professional (Business/Creator) account, is linked to your Facebook Page, "
+                            "and that all Page & Instagram permissions were granted during Facebook Login."
+                        )
+
+                    ig_user_id = str(ig_business_account["id"])
+                    raw_username = ig_business_account.get("username", "").strip()
+                    account_handle = f"@{raw_username}" if raw_username else "@instagram_business"
+                    display_name = ig_business_account.get("name") or selected_page_name or raw_username or "Instagram Business"
+                    avatar_url = ig_business_account.get("profile_picture_url") or "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop"
+
+                    token_expires_at = (datetime.utcnow() + timedelta(seconds=expires_in)).isoformat()
+
+                    return {
+                        "account_id": ig_user_id,
+                        "account_handle": account_handle,
+                        "display_name": display_name,
+                        "avatar_url": avatar_url,
+                        "access_token": access_token,
+                        "refresh_token": access_token,
+                        "token_expires_at": token_expires_at,
+                        "scopes": ["instagram_basic", "instagram_content_publish", "pages_show_list", "pages_read_engagement"],
+                        "provider_mode": "live",
+                        "metadata": {
+                            "page_id": selected_page_id,
+                            "page_name": selected_page_name
+                        }
+                    }
+            except ProviderError:
+                raise
+            except Exception as e:
+                logger.error(f"Live Instagram OAuth exchange failed: {e}")
+                raise cls.map_provider_http_exception(e, "instagram")
 
     @classmethod
     def is_mock_allowed(cls) -> bool:
@@ -294,74 +510,6 @@ class SocialOAuthService:
             "refresh_token": f"sim_refresh_x_{secrets.token_hex(20)}",
             "token_expires_at": token_exp,
             "scopes": ["tweet.read", "tweet.write", "offline.access"],
-            "provider_mode": "simulated"
-        }
-
-    @classmethod
-    async def _exchange_instagram(cls, code: str, redirect_uri: str) -> Dict[str, Any]:
-        app_id = settings.INSTAGRAM_APP_ID
-        app_secret = settings.INSTAGRAM_APP_SECRET
-
-        if app_id and app_secret and "mock" not in app_id:
-            try:
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    token_res = await client.post(
-                        "https://api.instagram.com/oauth/access_token",
-                        data={
-                            "client_id": app_id,
-                            "client_secret": app_secret,
-                            "grant_type": "authorization_code",
-                            "redirect_uri": redirect_uri,
-                            "code": code
-                        }
-                    )
-                    token_res.raise_for_status()
-                    token_data = token_res.json()
-                    short_token = token_data.get("access_token")
-                    user_id = str(token_data.get("user_id", f"ig_{secrets.token_hex(4)}"))
-
-                    # Exchange for 60-day long-lived token
-                    long_res = await client.get(
-                        "https://graph.instagram.com/access_token",
-                        params={
-                            "grant_type": "ig_exchange_token",
-                            "client_secret": app_secret,
-                            "access_token": short_token
-                        }
-                    )
-                    long_data = long_res.json() if long_res.status_code == 200 else {}
-                    access_token = long_data.get("access_token", short_token)
-                    expires_in = long_data.get("expires_in", 5184000)
-
-                    return {
-                        "account_id": user_id,
-                        "account_handle": "@company_official",
-                        "display_name": "Instagram Business",
-                        "avatar_url": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop",
-                        "access_token": access_token,
-                        "refresh_token": access_token,
-                        "token_expires_at": (datetime.utcnow() + timedelta(seconds=expires_in)).isoformat(),
-                        "scopes": ["instagram_basic", "instagram_content_publish"],
-                        "provider_mode": "live"
-                    }
-            except Exception as e:
-                logger.error(f"Live Instagram OAuth exchange failed: {e}")
-                if not cls.is_mock_allowed():
-                    raise cls.map_provider_http_exception(e, "instagram")
-
-        if not cls.is_mock_allowed():
-            raise ProviderConfigurationError("Instagram OAuth is unconfigured in production (INSTAGRAM_APP_ID / INSTAGRAM_APP_SECRET missing).")
-
-        token_exp = (datetime.utcnow() + timedelta(days=60)).isoformat()
-        return {
-            "account_id": f"ig_auth_{secrets.token_hex(4)}",
-            "account_handle": "@company_official",
-            "display_name": "Instagram Business (Simulated)",
-            "avatar_url": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop",
-            "access_token": f"sim_ig_{secrets.token_hex(20)}",
-            "refresh_token": f"sim_refresh_ig_{secrets.token_hex(20)}",
-            "token_expires_at": token_exp,
-            "scopes": ["instagram_basic", "instagram_content_publish"],
             "provider_mode": "simulated"
         }
 

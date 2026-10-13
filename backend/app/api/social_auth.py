@@ -107,7 +107,7 @@ def get_authorization_url(
     elif platform == "instagram":
         client_id = settings.INSTAGRAM_APP_ID or "mock_ig_app_id"
         target_redirect = settings.INSTAGRAM_REDIRECT_URI
-        scope = "instagram_basic,instagram_content_publish,pages_show_list"
+        scope = "instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement,business_management"
         auth_url = (
             f"https://www.facebook.com/v19.0/dialog/oauth?"
             f"client_id={client_id}&redirect_uri={target_redirect}&state={state}&scope={scope}"
