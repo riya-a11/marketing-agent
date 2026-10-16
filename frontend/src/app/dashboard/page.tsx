@@ -8,6 +8,9 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(false);
   const [variations, setVariations] = useState<any[]>([]);
   const [selectedPost, setSelectedPost] = useState<number | null>(null);
+  const [publishing, setPublishing] = useState(false);
+  const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
 
   const generatePosts = async () => {
     setLoading(true);
@@ -19,6 +22,30 @@ export default function Dashboard() {
     const data = await res.json();
     setVariations(data.variations);
     setLoading(false);
+  };
+
+  const publishSelectedPost = async () => {
+    if (selectedPost === null || !variations[selectedPost]) return;
+    setPublishing(true);
+    setPublishedUrl(null);
+    setPublishError(null);
+
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/publish/x`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ caption: variations[selectedPost].body })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || 'Unable to publish to X.');
+      }
+      setPublishedUrl(data.url);
+    } catch (error) {
+      setPublishError(error instanceof Error ? error.message : 'Unable to publish to X.');
+    } finally {
+      setPublishing(false);
+    }
   };
 
   const proceedToVideo = () => {
@@ -66,16 +93,24 @@ export default function Dashboard() {
       )}
 
       {selectedPost !== null && (
-        <div className="fixed bottom-0 left-0 right-0 p-6 bg-zinc-900 border-t border-zinc-800 flex justify-center gap-4">
-          <button className="flex items-center gap-2 bg-zinc-800 px-8 py-4 rounded-full font-bold hover:bg-zinc-700">
-            <Type size={20} /> Publish to Social
-          </button>
-          <button
-            onClick={proceedToVideo}
-            className="flex items-center gap-2 bg-blue-600 text-white px-8 py-4 rounded-full font-bold hover:bg-blue-700"
-          >
-            <Video size={20} /> Turn into 9:16 Reel
-          </button>
+        <div className="fixed bottom-0 left-0 right-0 p-6 bg-zinc-900 border-t border-zinc-800 flex flex-col items-center gap-3">
+          <div className="flex justify-center gap-4">
+            <button
+              onClick={publishSelectedPost}
+              disabled={publishing}
+              className="flex items-center gap-2 bg-zinc-800 px-8 py-4 rounded-full font-bold hover:bg-zinc-700 disabled:opacity-50"
+            >
+              <Type size={20} /> {publishing ? 'Publishing to X...' : 'Publish to X'}
+            </button>
+            <button
+              onClick={proceedToVideo}
+              className="flex items-center gap-2 bg-blue-600 text-white px-8 py-4 rounded-full font-bold hover:bg-blue-700"
+            >
+              <Video size={20} /> Turn into 9:16 Reel
+            </button>
+          </div>
+          {publishedUrl && <a href={publishedUrl} target="_blank" rel="noreferrer" className="text-green-400 underline">View published post on X</a>}
+          {publishError && <p role="alert" className="text-red-400">{publishError}</p>}
         </div>
       )}
     </main>

@@ -5,6 +5,10 @@ import { Film, PlayCircle, Loader2 } from 'lucide-react';
 export default function VideoStudio() {
   const [stage, setStage] = useState<'config' | 'rendering' | 'done'>('config');
   const [videoUrl, setVideoUrl] = useState('');
+  const [caption, setCaption] = useState('');
+  const [publishing, setPublishing] = useState(false);
+  const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
 
   const handleRender = async () => {
     setStage('rendering');
@@ -30,6 +34,29 @@ export default function VideoStudio() {
       setVideoUrl(renderData.video_url || 'https://www.w3schools.com/html/mov_bbb.mp4');
       setStage('done');
     }, 3000);
+  };
+
+  const handlePublish = async () => {
+    setPublishing(true);
+    setPublishedUrl(null);
+    setPublishError(null);
+
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/publish/x`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ video_url: videoUrl, caption })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || 'Unable to publish to X.');
+      }
+      setPublishedUrl(data.url);
+    } catch (error) {
+      setPublishError(error instanceof Error ? error.message : 'Unable to publish to X.');
+    } finally {
+      setPublishing(false);
+    }
   };
 
   return (
@@ -83,14 +110,35 @@ export default function VideoStudio() {
             autoPlay
             className="w-[320px] h-[568px] bg-black rounded-lg shadow-xl object-cover"
           />
+          <div className="w-full max-w-md mt-6">
+            <label htmlFor="x-caption" className="block text-sm font-bold mb-2">X caption (optional)</label>
+            <textarea
+              id="x-caption"
+              value={caption}
+              onChange={(event) => setCaption(event.target.value)}
+              rows={3}
+              placeholder="Write a caption for your video..."
+              className="w-full p-3 rounded bg-zinc-800 border border-zinc-700 text-white"
+            />
+          </div>
           <div className="mt-8 flex gap-4">
             <button className="bg-white text-black px-6 py-3 rounded font-bold hover:bg-gray-200">
               Download MP4
             </button>
-            <button className="bg-blue-600 text-white px-6 py-3 rounded font-bold hover:bg-blue-700">
-              Publish Directly
+            <button
+              onClick={handlePublish}
+              disabled={publishing}
+              className="bg-blue-600 text-white px-6 py-3 rounded font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {publishing ? 'Publishing to X...' : 'Publish to X'}
             </button>
           </div>
+          {publishedUrl && (
+            <p className="mt-4 text-green-400">
+              Published: <a href={publishedUrl} target="_blank" rel="noreferrer" className="underline">View post on X</a>
+            </p>
+          )}
+          {publishError && <p role="alert" className="mt-4 text-red-400">{publishError}</p>}
         </div>
       )}
     </main>
